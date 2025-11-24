@@ -236,7 +236,6 @@ class CodeTestResult(Base):
     )
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Relationships
     interview_step: Mapped["InterviewStep"] = relationship(
         "InterviewStep",
         back_populates="code_test_results",
