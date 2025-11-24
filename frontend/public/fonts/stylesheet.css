@@ -1,0 +1,136 @@
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport.eot");
+  src: url("/fonts/Aeroport.woff2") format("woff2"),
+    url("/fonts/Aeroport.woff") format("woff"),
+    url("/fonts/Aeroport.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-Bold.eot");
+  src: url("/fonts/Aeroport-Bold.woff2") format("woff2"),
+    url("/fonts/Aeroport-Bold.woff") format("woff"),
+    url("/fonts/Aeroport-Bold.ttf") format("truetype");
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-Medium.eot");
+  src: url("/fonts/Aeroport-Medium.woff2") format("woff2"),
+    url("/fonts/Aeroport-Medium.woff") format("woff"),
+    url("/fonts/Aeroport-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-Light.eot");
+  src: url("/fonts/Aeroport-Light.woff2") format("woff2"),
+    url("/fonts/Aeroport-Light.woff") format("woff"),
+    url("/fonts/Aeroport-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-Italic.eot");
+  src: url("/fonts/Aeroport-Italic.woff2") format("woff2"),
+    url("/fonts/Aeroport-Italic.woff") format("woff"),
+    url("/fonts/Aeroport-Italic.ttf") format("truetype");
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-BoldItalic.eot");
+  src: url("/fonts/Aeroport-BoldItalic.woff2") format("woff2"),
+    url("/fonts/Aeroport-BoldItalic.woff") format("woff"),
+    url("/fonts/Aeroport-BoldItalic.ttf") format("truetype");
+  font-weight: bold;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-MediumItalic.eot");
+  src: url("/fonts/Aeroport-MediumItalic.woff2") format("woff2"),
+    url("/fonts/Aeroport-MediumItalic.woff") format("woff"),
+    url("/fonts/Aeroport-MediumItalic.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Aeroport";
+  src: url("/fonts/Aeroport-LightItalic.eot");
+  src: url("/fonts/Aeroport-LightItalic.woff2") format("woff2"),
+    url("/fonts/Aeroport-LightItalic.woff") format("woff"),
+    url("/fonts/Aeroport-LightItalic.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+}
+
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-Medium.ttf') format('truetype');
+    font-weight: 500; /* Обычно 500 для Medium */
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-MediumItalic.ttf') format('truetype');
+    font-weight: 500;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-SemiBold.ttf') format('truetype');
+    font-weight: 600; /* Обычно 600 для SemiBold */
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-SemiBoldItalic.ttf') format('truetype');
+    font-weight: 600;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-Bold.ttf') format('truetype');
+    font-weight: bold; /* Или 700 */
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Writer';
+    src: url('Writer-BoldItalic.ttf') format('truetype');
+    font-weight: bold; /* Или 700 */
+    font-style: italic;
+}
