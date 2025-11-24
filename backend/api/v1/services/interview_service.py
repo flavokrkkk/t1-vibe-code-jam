@@ -40,12 +40,16 @@ class InterviewService:
         user_id: UUID,
         job_role_description: str,
         amount_of_tasks: int,
+        key_skills: list[str] | None = None,
+        preferences: str | None = None,
     ) -> Interview:
         """Создание нового интервью."""
         interview = Interview(
             user_id=user_id,
             job_role_description=job_role_description,
             amount_of_tasks=amount_of_tasks,
+            key_skills=key_skills or [],
+            preferences=preferences,
             current_step_index=0,
             status=InterviewStatus.IN_PROGRESS,
         )
@@ -69,7 +73,6 @@ class InterviewService:
         db.add(message)
         await db.commit()
 
-        # Перезагружаем интервью с загрузкой всех отношений
         return await self.find_interview_by_id(db, interview.id, None)
 
     async def find_all_user_interviews(
@@ -335,7 +338,5 @@ class InterviewService:
         )
 
         await db.commit()
-        # Очищаем кэш сессии, чтобы получить свежие данные из БД
         db.expire_all()
-        # Перезагружаем интервью с актуальными данными
         return await self.find_interview_by_id(db, interview_id, None)

@@ -22,7 +22,7 @@ export const Sidebar = () => {
   return (
     <div
       className={cn(
-        "flex h-screen flex-col justify-between relative border-r space-y-2 border-gray-200 bg-white shadow-md transition-[width] duration-200 ease-linear overflow-hidden",
+        "flex h-screen flex-col justify-between relative border-r rounded-r-2xl space-y-2 border-gray-200 bg-white shadow-md transition-[width] duration-200 ease-linear overflow-hidden",
         isExpanded ? "w-64" : "w-16"
       )}
       onMouseEnter={handleMouseEnter}

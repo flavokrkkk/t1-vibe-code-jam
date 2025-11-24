@@ -5,6 +5,8 @@ import { lazy } from "react";
 import AuthPage from "./(auth)/authPage";
 import { ERouteNames } from "@/shared/lib/routeVariables";
 import { interviewDetailAction } from "@/entities/interview/action/interviewAction";
+import { privatePage } from "@/entities/viewer/lib";
+import { routesWithHoc } from "@/shared/lib/routesWithHoc";
 
 const DashboardPage = lazy(() => import("@/pages/(main)/dashboardPage"));
 const InterviewPage = lazy(() => import("@/pages/(main)/interviewPage"));
@@ -26,33 +28,35 @@ export const routes = createBrowserRouter([
         path: ERouteNames.EMPTY_ROUTE,
         element: <Outlet />,
         children: [
-          {
-            path: ERouteNames.EMPTY_ROUTE,
-            element: <Navigate to={ERouteNames.DASHBOARD_ROUTE} replace />,
-          },
-          {
-            path: ERouteNames.DASHBOARD_ROUTE,
-            element: <Outlet />,
-            children: [
-              {
-                path: ERouteNames.EMPTY_ROUTE,
-                element: <DashboardPage />,
-              },
-              {
-                path: ERouteNames.INTERVIEW_DETAIL_ROUTE,
-                element: <InterviewPage />,
-                loader: interviewDetailAction,
-              },
-              {
-                path: ERouteNames.PROFILE_ROUTE,
-                element: <ProfilePage />,
-              },
-              {
-                path: ERouteNames.INTERVIEW_HISTORY_ROUTE,
-                element: <InterviewHistoryPage />,
-              },
-            ],
-          },
+          ...routesWithHoc(privatePage, [
+            {
+              path: ERouteNames.EMPTY_ROUTE,
+              element: <Navigate to={ERouteNames.DASHBOARD_ROUTE} replace />,
+            },
+            {
+              path: ERouteNames.DASHBOARD_ROUTE,
+              element: <Outlet />,
+              children: [
+                {
+                  path: ERouteNames.EMPTY_ROUTE,
+                  element: <DashboardPage />,
+                },
+                {
+                  path: ERouteNames.INTERVIEW_DETAIL_ROUTE,
+                  element: <InterviewPage />,
+                  loader: interviewDetailAction,
+                },
+                {
+                  path: ERouteNames.PROFILE_ROUTE,
+                  element: <ProfilePage />,
+                },
+                {
+                  path: ERouteNames.INTERVIEW_HISTORY_ROUTE,
+                  element: <InterviewHistoryPage />,
+                },
+              ],
+            },
+          ]),
         ],
       },
       {

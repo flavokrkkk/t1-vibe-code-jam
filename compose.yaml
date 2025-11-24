@@ -1,6 +1,12 @@
-version: '3.8'
-
 services:
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "5173:80"
+  #   restart: always
+
   db:
     image: postgres:16-alpine
     container_name: ai-interview-db
@@ -22,7 +28,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ai-interview-api
     environment:
@@ -41,10 +47,28 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - .:/app
+      - ./backend:/app
     networks:
       - app-network
     restart: unless-stopped
+
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-interview-migrations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ai_interview}
+    command: alembic upgrade head
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - app-network
+    profiles:
+      - migrations
 
 volumes:
   postgres_data:
@@ -52,4 +76,3 @@ volumes:
 networks:
   app-network:
     driver: bridge
-

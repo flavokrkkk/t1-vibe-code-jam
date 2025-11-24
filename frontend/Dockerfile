@@ -1,19 +1,28 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
+
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+
+ARG VITE_API_URL=http://localhost:8080/
+ENV VITE_API_URL=$VITE_API_URL
+
+COPY package.json package-lock.json* ./
+
+RUN npm install --legacy-peer-deps
+
+RUN ./node_modules/.bin/tsc --version && \
+    ./node_modules/.bin/vite --version
+
 COPY . .
-RUN npm run build
 
-FROM node:20-alpine
-WORKDIR /app
+RUN ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
 
-RUN apk add --no-cache libstdc++ && \
-    rm -rf /var/cache/apk/*
+FROM nginx:alpine
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-CMD ["npm", "run", "dev"]
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+

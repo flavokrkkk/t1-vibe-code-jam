@@ -36,6 +36,8 @@ async def create_interview(
         current_user.id,
         data.job_role_description,
         data.amount_of_tasks,
+        data.key_skills,
+        data.preferences,
     )
     return InterviewResponse.model_validate(interview)
 

@@ -63,7 +63,7 @@ const InterviewHistoryPage = () => {
   }
 
   return (
-    <div className="bg-gray-50">
+    <div>
       <div className="max-w-7xl mx-auto px-6 pb-12 space-y-4">
         <div className="relative mt-4">
           <Image
@@ -93,7 +93,7 @@ const InterviewHistoryPage = () => {
             return (
               <div
                 key={interview.id}
-                className="bg-white rounded-4xl border border-blue-300 transition-all duration-300 overflow-hidden group"
+                className="bg-white rounded-4xl transition-all duration-300 overflow-hidden group"
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-5">

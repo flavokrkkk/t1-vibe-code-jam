@@ -106,6 +106,8 @@ class Interview(Base):
     )
     job_role_description: Mapped[str] = mapped_column(Text)
     amount_of_tasks: Mapped[int] = mapped_column(Integer)
+    key_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    preferences: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_step_index: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[InterviewStatus] = mapped_column(
         SQLEnum(InterviewStatus),

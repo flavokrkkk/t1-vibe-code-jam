@@ -10,6 +10,7 @@ import { cn } from "@/shared/lib/mergeClass";
 import { Button } from "@/shared/ui/button/button";
 import { useState } from "react";
 import { useCreateInterview } from "../hooks/useCreateInterview";
+import { SkillsInput } from "./SkillsInput";
 
 const questionOptions = [5, 10, 15, 20, 25, 30];
 
@@ -23,6 +24,8 @@ export const InterviewCreateForm = () => {
     defaultValues: {
       job_role_description: "",
       amount_of_tasks: currentAmountOfQuestions,
+      key_skills: [],
+      preferences: "",
     },
   });
 
@@ -49,9 +52,8 @@ export const InterviewCreateForm = () => {
           Создайте ваше интервью
         </h1>
         <p className="text-base text-gray-600 mx-auto mb-12">
-          Просто выберите свою должность и отрасль или введите описание
-          вакансии, затем укажите, на сколько вопросов вы хотели бы ответить.
-          После этого начнется собеседование. Сохраняйте спокойствие и удачи!
+          Укажите должность, добавьте ключевые навыки, пожелания и количество
+          вопросов. После этого начнется собеседование. Удачи!
         </p>
         <Form {...form}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -81,6 +83,60 @@ export const InterviewCreateForm = () => {
                     {errors.job_role_description && (
                       <p className="text-red-500 text-sm mt-1 text-left">
                         {errors.job_role_description.message}
+                      </p>
+                    )}
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="text-left">
+              <label className="block text-gray-600 text-sm font-medium mb-2">
+                Ключевые навыки
+              </label>
+              <FormField
+                control={form.control}
+                name="key_skills"
+                render={({ field }) => (
+                  <FormItem>
+                    <SkillsInput
+                      skills={field.value}
+                      onChange={field.onChange}
+                      maxSkills={5}
+                      disabled={isPending}
+                      error={errors.key_skills?.message}
+                    />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="text-left">
+              <label
+                htmlFor="preferences"
+                className="block text-gray-600 text-sm font-medium mb-2"
+              >
+                Пожелания (необязательно)
+              </label>
+              <FormField
+                control={form.control}
+                name="preferences"
+                render={({ field }) => (
+                  <FormItem className="relative">
+                    <FloatingLabelInput
+                      {...field}
+                      label="Введите ваши пожелания..."
+                      labelClassName="text-zinc-600"
+                      className={cn(
+                        "py-2.5 bg-zinc-200 rounded-2xl border border-gray-300 text-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500",
+                        errors.preferences && "border-red-500",
+                        isPending && "opacity-70 cursor-not-allowed"
+                      )}
+                      disabled={isPending}
+                    />
+                    {errors.preferences && (
+                      <p className="text-red-500 text-sm mt-1 text-left">
+                        {errors.preferences.message}
                       </p>
                     )}
                   </FormItem>

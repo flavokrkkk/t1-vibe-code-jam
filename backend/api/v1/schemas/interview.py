@@ -22,6 +22,28 @@ class CreateInterviewSchema(BaseModel):
         le=30,
         description="Количество задач должно быть от 1 до 30",
     )
+    key_skills: list[str] = Field(
+        default_factory=list,
+        description="Список ключевых навыков (максимум 5)",
+    )
+    preferences: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Пожелания пользователя (необязательно, максимум 1000 символов)",
+    )
+
+    @field_validator("key_skills")
+    @classmethod
+    def validate_key_skills(cls, v: list[str]) -> list[str]:
+        """Валидация ключевых навыков."""
+        if len(v) > 5:
+            raise ValueError("Можно добавить максимум 5 ключевых навыков")
+        for skill in v:
+            if not skill or not skill.strip():
+                raise ValueError("Навык не может быть пустым")
+            if len(skill) > 50:
+                raise ValueError("Навык не может быть длиннее 50 символов")
+        return v
 
 
 class ChatMessageSchema(BaseModel):
@@ -113,6 +135,8 @@ class InterviewResponse(BaseModel):
     user_id: UUID
     job_role_description: str
     amount_of_tasks: int
+    key_skills: list[str] = []
+    preferences: str | None = None
     current_step_index: int
     status: str
     total_score: int | None
