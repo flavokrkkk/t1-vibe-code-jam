@@ -19,7 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from scibox_config import DEFAULT_CHAT_MODEL, SCIBOX_BASE_URL
 
 
-def get_scibox_llm(model: str = DEFAULT_CHAT_MODEL, temperature: float = 0.7):
+def get_scibox_llm(model: str = DEFAULT_CHAT_MODEL, temperature: float = 0.3):
     """Создание LangChain LLM для SciBox."""
     api_key = os.getenv("SCIBOX_API_KEY")
     if not api_key:
