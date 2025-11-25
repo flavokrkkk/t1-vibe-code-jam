@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dto.user import BaseUserSchema
+from core.services.ml_client import MLClient
 import core.services as services
 
 
@@ -36,9 +37,17 @@ async def get_current_user_dependency(
     return await auth_service.check_user_exist(token_data)
 
 
-async def get_interview_service(session=Depends(get_db_session)) -> services.InterviewService:
+async def get_ml_client() -> MLClient:
+    return MLClient()
+
+
+async def get_interview_service(
+    session=Depends(get_db_session),
+    ml_client: MLClient = Depends(get_ml_client),
+) -> services.InterviewService:
     return services.InterviewService(
-        session=session
+        session=session,
+        ml_client=ml_client
     )
 
 

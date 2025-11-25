@@ -102,4 +102,30 @@ class AuthService(BaseDbModelService[User]):
         access_token = self._create_access_token(new_user)
         refresh_token = self._create_refresh_token(new_user)
         return TokenSchema(access_token=access_token, refresh_token=refresh_token)
+
+    async def refresh_token(self, refresh_token: str) -> TokenSchema:
+        """Обновление токенов доступа."""
+        try:
+            # Проверяем валидность refresh токена
+            payload = await self.verify_token(refresh_token)
+            user_id = UUID(payload.get("sub"))
+            
+            # Проверяем существование пользователя
+            user = (
+                await self.session.execute(
+                    select(User).where(User.id == user_id)
+                )
+            ).scalar_one_or_none()
+            
+            if not user:
+                raise InvalidCredentials()
+                
+            # Генерируем новые токены
+            access_token = self._create_access_token(user)
+            new_refresh_token = self._create_refresh_token(user)
+            
+            return TokenSchema(access_token=access_token, refresh_token=new_refresh_token)
+            
+        except (ValueError, TypeError):
+            raise InvalidCredentials()
         
