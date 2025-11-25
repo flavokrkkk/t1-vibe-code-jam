@@ -25,8 +25,6 @@ class Settings(BaseSettings):
         """Преобразование строки origins в список."""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
 
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-
     ASSEMBLYAI_API_KEY: str | None = None
 
     model_config = SettingsConfigDict(
