@@ -41,10 +41,14 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 - Если кандидат ответил на твой вопрос - анализируй его ответ и либо задавай уточняющий вопрос, либо переходи к следующему вопросу
 - Если ответ неполный или требует уточнения, задавай уточняющие вопросы для получения дополнительной информации
 - Оценивай не только технические знания, но и способ мышления и подход к решению задач
-- После каждого ответа давай краткую обратную связь или переходи к следующему вопросу
-- Когда считаешь, что собрал достаточно информации для оценки (обычно после {amount_of_tasks} основных вопросов), заверши интервью фразой: "[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ]"
-- Не завершай интервью слишком рано - убедись, что получил достаточно информации по всем требуемым навыкам
-- Можешь задавать несколько уточняющих вопросов подряд, если это необходимо для полной оценки
+- После каждого ответа кандидата давай краткую обратную связь (1-2 предложения) и СРАЗУ задавай следующий вопрос в ОДНОМ сообщении
+- Формат: сначала краткая обратная связь по ответу, затем следующий вопрос
+- НЕ разделяй обратную связь и следующий вопрос на отдельные сообщения - они должны быть вместе
+- Когда задал примерно {amount_of_tasks} основных вопросов ИЛИ если кандидат не знает ответы на 3-4 вопроса подряд - ОБЯЗАТЕЛЬНО заверши интервью фразой: "[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ]"
+- НЕ задавай один и тот же вопрос повторно - если кандидат не знает ответ, переходи к следующей теме
+- НЕ задавай вопросы по темам, которые уже были покрыты
+- Если кандидат не знает ответы на несколько вопросов подряд (3-4), это сигнал к завершению интервью
+- После завершения интервью предоставь итоговую обратную связь
 
 ВАЖНО:
 - Говори напрямую с кандидатом, как настоящий интервьюер
@@ -52,6 +56,8 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 - НЕ пиши фразы типа "Чтобы прояснить ситуацию", "Цель этих вопросов", "Я могу задать дополнительные вопросы"
 - Просто задавай вопросы и давай комментарии естественным образом
 - Не объясняй, зачем ты задаешь вопрос - просто задавай его
+- КРИТИЧЕСКИ ВАЖНО: Анализируй ТОЛЬКО то, что кандидат реально сказал в своем ответе. НЕ придумывай, что кандидат мог сказать или имел в виду. Если кандидат ответил "не знаю" или "не помню" - признай это честно, не приписывай ему знания, которых он не показал
+- Если кандидат не ответил на вопрос или ответил "не знаю" - либо задай более простой вопрос по той же теме, либо переходи к другой теме, но НЕ придумывай ответы за кандидата
 
 Формат итоговой обратной связи должен включать:
 - Общую оценку кандидата
@@ -138,36 +144,31 @@ class InterviewAgent:
         self.job_title = ""
         self.required_skills: list[str] = []
         self.code_submit_count: dict[str, int] = {}
+        self.questions_asked = 0
+        self.negative_answers_count = 0
 
-    def _create_agent(self) -> AgentExecutor:
-        """Создание LangChain агента с инструментами."""
-        def analyze_answer(answer: str) -> str:
-            """Анализирует ответ кандидата и возвращает краткую оценку."""
-            return f"Ответ проанализирован: {answer[:100]}..."
-        
-        tools = [
-            Tool(
-                name="analyze_answer",
-                func=analyze_answer,
-                description="Анализирует ответ кандидата на вопрос интервью"
-            ),
-        ]
-        
+    def _get_messages_with_history(self, user_input: str) -> list:
+        """Создание списка сообщений с полной историей для диалогового режима."""
         system_prompt = get_system_prompt(
             self.job_title,
             self.required_skills,
             self.amount_of_tasks
         )
         
-        prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content=system_prompt),
-            MessagesPlaceholder(variable_name="chat_history"),
-            HumanMessage(content="{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
+        messages = [SystemMessage(content=system_prompt)]
         
-        agent = create_openai_tools_agent(self.llm, tools, prompt)
-        return AgentExecutor(agent=agent, tools=tools, verbose=False)
+        for msg in self.conversation_history:
+            if isinstance(msg, (HumanMessage, AIMessage)):
+                cleaned_msg = msg
+                if isinstance(msg, AIMessage):
+                    content_cleaned = re.sub(r'<think>.*?</think>', '', msg.content, flags=re.DOTALL | re.IGNORECASE)
+                    content_cleaned = re.sub(r'<reasoning>.*?</reasoning>', '', content_cleaned, flags=re.DOTALL | re.IGNORECASE)
+                    if content_cleaned != msg.content:
+                        cleaned_msg = AIMessage(content=content_cleaned.strip())
+                messages.append(cleaned_msg)
+        
+        messages.append(HumanMessage(content=user_input))
+        return messages
 
     def _check_interview_end(self, response: str) -> bool:
         """Проверка, завершил ли агент интервью."""
@@ -213,15 +214,20 @@ class InterviewAgent:
         self.interview_ended = False
         self.conversation_history = []
         self.code_submit_count = {}
+        self.questions_asked = 0
+        self.negative_answers_count = 0
         
-        agent = self._create_agent()
+        messages = [
+            SystemMessage(content=get_system_prompt(
+                self.job_title,
+                self.required_skills,
+                self.amount_of_tasks
+            )),
+            HumanMessage(content="Начни интервью. Представься и задай первый вопрос кандидату.")
+        ]
         
-        result = agent.invoke({
-            "input": "Начни интервью. Представься и задай первый вопрос кандидату.",
-            "chat_history": [] 
-        })
-        
-        first_question = result.get("output", "")
+        response = self.llm.invoke(messages)
+        first_question = response.content if hasattr(response, 'content') else str(response)
         if not first_question:
             raise RuntimeError("Пустой ответ от модели")
         
@@ -234,6 +240,7 @@ class InterviewAgent:
         
         self.conversation_history.append(HumanMessage(content="Начни интервью"))
         self.conversation_history.append(AIMessage(content=first_question_cleaned))
+        self.questions_asked = 1
         
         return {
             "type": "DIALOG",
@@ -258,19 +265,102 @@ class InterviewAgent:
                 "feedback": None
             }
         
-        agent = self._create_agent()
+        last_question = ""
+        if len(self.conversation_history) >= 2:
+            last_ai_msg = self.conversation_history[-1]
+            if isinstance(last_ai_msg, AIMessage):
+                last_question = last_ai_msg.content[:200]
         
-        chat_history_messages = []
-        for msg in self.conversation_history:
-            if isinstance(msg, (HumanMessage, AIMessage, SystemMessage)):
-                chat_history_messages.append(msg)
+        user_answer_lower = user_answer.lower().strip()
+        is_negative_answer = any(phrase in user_answer_lower for phrase in [
+            "не знаю", "не помню", "не знаю разницы", "не понимаю", 
+            "не могу", "не умею", "не знаю как", "не помню как",
+            "не использовал", "не использовал типы", "не работал",
+            "не знаю что", "не помню что", "не знаю как это",
+            "не знаю об этом", "не знаком", "не знаком с"
+        ])
         
-        result = agent.invoke({
-            "input": f"Кандидат ответил на твой предыдущий вопрос: '{user_answer}'. Проанализируй этот ответ и продолжай интервью. НЕ начинай интервью заново, НЕ задавай первый вопрос снова. Если ответ требует уточнения - задай уточняющий вопрос. Если ответ хороший и полный - переходи к следующему вопросу по навыкам. Помни контекст предыдущих вопросов и ответов.",
-            "chat_history": chat_history_messages
-        })
+        if is_negative_answer:
+            self.negative_answers_count += 1
+        else:
+            self.negative_answers_count = 0
         
-        ai_response = result.get("output", "")
+        should_end = (
+            self.questions_asked >= self.amount_of_tasks or
+            self.negative_answers_count >= 3
+        )
+        
+        next_question_num = self.questions_asked + 1
+        context_info = f"Уже задано вопросов: {self.questions_asked}/{self.amount_of_tasks}. Следующий вопрос будет номер {next_question_num}. Отрицательных ответов подряд: {self.negative_answers_count}."
+        
+        if is_negative_answer:
+            input_prompt = f"""{context_info}
+
+Кандидат ответил на твой вопрос '{last_question}' следующим образом: '{user_answer}'.
+
+КРИТИЧЕСКИ ВАЖНО: Кандидат сказал, что НЕ ЗНАЕТ/НЕ ИСПОЛЬЗОВАЛ/НЕ РАБОТАЛ. Это означает:
+- Кандидат НЕ упомянул никаких технических деталей
+- Кандидат НЕ дал правильного ответа
+- Кандидат НЕ показал знаний по этой теме
+- Кандидат НЕ говорил про NumPy, массивы, типы данных, производительность и т.д. - если он этого не упомянул
+
+ТВОЯ ЗАДАЧА:
+1. Признай честно, что кандидат не знает ответа (1 предложение)
+2. СРАЗУ задай следующий вопрос в том же сообщении
+3. НЕ придумывай, что кандидат мог сказать
+4. НЕ хвали кандидата за ответ, которого он не дал
+5. НЕ упоминай технические термины, которые кандидат НЕ использовал в своем ответе
+6. Либо задай более простой вопрос по этой теме, либо переходи к другой теме
+7. Будь тактичным, но честным
+
+Пример правильного формата:
+"Понятно, что вы не знаете ответа на этот вопрос. Давайте попробуем другой вопрос: [вопрос]"
+
+ВАЖНО:
+- НЕ пиши "Первый вопрос" или "Вопрос 1" - это уже {next_question_num}-й вопрос
+- НЕ нумеруй вопросы явно, просто задавай их естественно
+- НЕ повторяй вопросы, которые уже задавал
+
+ЗАПРЕЩЕНО писать:
+- "Хорошо, вы правильно отметили..." если кандидат ничего не отметил
+- "Вы упомянули NumPy..." если кандидат не упоминал NumPy
+- "Это демонстрирует понимание..." если кандидат не показал понимания
+- Любые положительные оценки, если кандидат сказал "не знаю" или "не использовал"
+
+НЕ разделяй обратную связь и вопрос на отдельные сообщения.
+
+{'ВНИМАНИЕ: Уже задано достаточно вопросов или кандидат не знает ответы на несколько вопросов подряд. СЛЕДУЮЩИЙ ШАГ - заверши интервью фразой "[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ]" и предоставь итоговую обратную связь.' if should_end else ''}"""
+        else:
+            input_prompt = f"""{context_info}
+
+Кандидат ответил на твой предыдущий вопрос '{last_question}' следующим образом: '{user_answer}'.
+
+ТВОЯ ЗАДАЧА:
+1. Дай краткую обратную связь по ответу кандидата (1-2 предложения) - что хорошо, что можно улучшить
+2. СРАЗУ задай следующий вопрос в том же сообщении
+3. НЕ разделяй обратную связь и вопрос на отдельные сообщения - они должны быть вместе
+4. Если ответ требует уточнения - дай обратную связь и задай уточняющий вопрос
+5. Если ответ хороший и полный - дай положительную обратную связь и переходи к следующему вопросу по навыкам
+
+Пример правильного формата:
+"Хороший ответ, вы правильно упомянули основные особенности. Теперь следующий вопрос: [вопрос]"
+
+ВАЖНО:
+- НЕ пиши "Первый вопрос" или "Вопрос 1" - это уже {next_question_num}-й вопрос
+- НЕ нумеруй вопросы явно, просто задавай их естественно
+- НЕ повторяй вопросы, которые уже задавал
+
+НЕ делай так:
+"Отлично! Вы дали хороший ответ. Теперь давайте перейдем к SQL.
+Вопрос 2: [вопрос]"
+
+НЕ начинай интервью заново.
+
+{'ВНИМАНИЕ: Уже задано достаточно вопросов. СЛЕДУЮЩИЙ ШАГ - заверши интервью фразой "[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ]" и предоставь итоговую обратную связь.' if should_end else ''}"""
+        
+        messages = self._get_messages_with_history(input_prompt)
+        response = self.llm.invoke(messages)
+        ai_response = response.content if hasattr(response, 'content') else str(response)
         if not ai_response:
             raise RuntimeError("Пустой ответ от модели")
         
@@ -286,10 +376,43 @@ class InterviewAgent:
         if not ai_response_cleaned:
             ai_response_cleaned = ai_response
         
+        if is_negative_answer:
+            negative_phrases = [
+                "правильно отметил", "правильно упомянул", "правильно сказал",
+                "отличный ответ", "хороший ответ", "ты правильно",
+                "ты упомянул", "ты отметил", "ты сказал", "вы правильно",
+                "вы упомянули", "вы отметили", "вы сказали", "хорошо, вы правильно",
+                "вы дали хороший ответ", "вы правильно отметили", "демонстрирует понимание",
+                "это демонстрирует", "преимущества", "по сравнению", "numpy", "массивы"
+            ]
+            response_lower = ai_response_cleaned.lower()
+            
+            user_words = set(re.findall(r'\b\w+\b', user_answer_lower))
+            response_words = set(re.findall(r'\b\w+\b', response_lower))
+            
+            has_positive_feedback = any(phrase in response_lower for phrase in negative_phrases)
+            mentions_user_content = len(user_words & response_words) > 2
+            
+            if has_positive_feedback and not mentions_user_content:
+                logger.warning(f"Модель приписала ответ кандидату. Ответ кандидата: '{user_answer}', ответ модели: '{ai_response_cleaned[:200]}'")
+                ai_response_cleaned = f"Понятно, что вы не знаете ответа на этот вопрос. Давайте попробуем другой вопрос или перейдем к другой теме."
+        
         self.conversation_history.append(HumanMessage(content=user_answer))
         self.conversation_history.append(AIMessage(content=ai_response_cleaned))
         
+        if not self._check_interview_end(ai_response_cleaned):
+            self.questions_asked += 1
+        
+        if should_end and not self.interview_ended:
+            self.interview_ended = True
+            logger.info(f"Интервью завершено автоматически: вопросов {self.questions_asked}, отрицательных ответов подряд {self.negative_answers_count}")
+        
         parsed = self._parse_ai_response(ai_response_cleaned)
+        
+        if self.interview_ended and "[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ]" in ai_response_cleaned:
+            ai_response_cleaned = re.sub(r'\[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ\]|\[END_INTERVIEW\]', '', ai_response_cleaned, flags=re.IGNORECASE).strip()
+            final_feedback = self.generate_feedback()
+            ai_response_cleaned = f"{ai_response_cleaned}\n\n{final_feedback}"
         
         return {
             "type": "DIALOG",
@@ -337,13 +460,6 @@ class InterviewAgent:
             for r in test_results
         ])
         
-        agent = self._create_agent()
-        
-        chat_history_messages = []
-        for msg in self.conversation_history:
-            if isinstance(msg, (HumanMessage, AIMessage)):
-                chat_history_messages.append(msg)
-        
         prompt = f"""Кандидат отправил код для задачи: {task_description}
 
 Код кандидата:
@@ -361,12 +477,9 @@ class InterviewAgent:
 ФИДБЭК: [твой фидбэк по коду]
 ОЦЕНКА: [число от 0 до 100]"""
         
-        result = agent.invoke({
-            "input": prompt,
-            "chat_history": chat_history_messages
-        })
-        
-        ai_response = result.get("output", "")
+        messages = self._get_messages_with_history(prompt)
+        response = self.llm.invoke(messages)
+        ai_response = response.content if hasattr(response, 'content') else str(response)
         parsed = self._parse_ai_response(ai_response)
         
         code_score = parsed.get("score", 0)
@@ -392,22 +505,16 @@ class InterviewAgent:
 
     def generate_feedback(self) -> str:
         """Генерация итоговой обратной связи на основе всего интервью."""
-        agent = self._create_agent()
+        prompt = "Интервью завершено. Предоставь итоговую обратную связь по кандидату, включая оценку по каждому навыку, сильные стороны, области для улучшения и рекомендации."
         
-        chat_history_messages = []
-        for msg in self.conversation_history:
-            if isinstance(msg, (HumanMessage, AIMessage)):
-                chat_history_messages.append(msg)
-        
-        result = agent.invoke({
-            "input": "Интервью завершено. Предоставь итоговую обратную связь по кандидату, включая оценку по каждому навыку, сильные стороны, области для улучшения и рекомендации.",
-            "chat_history": chat_history_messages
-        })
-        
-        return result.get("output", "")
+        messages = self._get_messages_with_history(prompt)
+        response = self.llm.invoke(messages)
+        return response.content if hasattr(response, 'content') else str(response)
 
     def reset(self):
         """Сброс истории разговора."""
         self.conversation_history = []
         self.interview_ended = False
         self.code_submit_count = {}
+        self.questions_asked = 0
+        self.negative_answers_count = 0
