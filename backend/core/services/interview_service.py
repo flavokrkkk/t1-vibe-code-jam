@@ -5,6 +5,7 @@ import logging
 import random
 from uuid import UUID
 import uuid
+from typing import Any
 
 from fastapi import UploadFile
 import httpx
@@ -12,11 +13,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from core.services.base import BaseDbModelService
+from core.services.ml_client import MLClient
 from core.dto.interview import InterviewSchema, ListInterviewItemSchema
 from core.config.config import settings
 from infrastructure.errors.base import BadRequestException, NotFoundException
 from infrastructure.database.models.models import (
     ChatMessage,
+    CodeTask,
     CodeTestResult,
     CodeTestResultStatus,
     Interview,
@@ -31,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 class InterviewService(BaseDbModelService[Interview]):
+    def __init__(self, session, ml_client: MLClient | None = None):
+        """Инициализация сервиса интервью."""
+        super().__init__(session)
+        self.ml_client = ml_client
+
     async def create_interview(
         self,
         user_id: UUID,
@@ -55,26 +63,58 @@ class InterviewService(BaseDbModelService[Interview]):
         self.session.add(interview)
         await self.session.flush()
 
-        step = InterviewStep(
-            interview_id=interview.id,
-            type=InterviewStepType.DIALOG,
-            status=InterviewStepStatus.IN_PROGRESS,
-            question_text="Здравствуйте! Я ваш виртуальный интервьюер. Расскажите, пожалуйста, о себе.",
+        # Вызываем ML API для получения первого шага
+        # Используем interview.id как session_id для согласованности
+        session_id = str(interview.id)
+        
+        ml_response = await self.ml_client.start_interview(
+            job_title=job_role_description,
+            required_skills=key_skills or [],
+            amount_of_tasks=amount_of_tasks,
+            session_id=session_id,
         )
-        self.session.add(step)
-        await self.session.flush()
-
-        message = ChatMessage(
-            interview_id=interview.id,
-            sender=MessageSender.AI,
-            text="Здравствуйте! Я ваш виртуальный интервьюер. Расскажите, пожалуйста, о себе.",
-        )
-        self.session.add(message)
+        
+        # ML API возвращает session_id и step
+        step_data = ml_response.get("step", {})
+        
+        await self._process_ml_step(interview, step_data)
         await self.session.commit()
         await self.session.refresh(interview)
 
         interview = await self.find_interview_by_id(interview.id, None)
         return InterviewSchema.model_validate(interview, from_attributes=True)
+
+    async def _process_ml_step(self, interview: Interview, step_data: dict[str, Any]):
+        """Обработка шага от ML сервиса: создание InterviewStep и ChatMessage."""
+        step_type = step_data.get("type", "DIALOG")
+        question_text = step_data.get("question_text", "")
+        ai_feedback = step_data.get("ai_feedback", "")
+        
+        # Текст сообщения от AI - это вопрос или фидбэк
+        message_text = question_text or ai_feedback
+        
+        if not message_text and step_type == "DIALOG":
+             message_text = "Здравствуйте! Готовы начать?"
+
+        # Создаем шаг интервью
+        step = InterviewStep(
+            interview_id=interview.id,
+            type=InterviewStepType(step_type),
+            status=InterviewStepStatus.IN_PROGRESS,
+            question_text=message_text,
+        )
+        self.session.add(step)
+        
+        # Создаем сообщение от AI
+        if message_text:
+            message = ChatMessage(
+                interview_id=interview.id,
+                sender=MessageSender.AI,
+                text=message_text,
+            )
+            self.session.add(message)
+            
+        await self.session.flush()
 
     async def find_all_user_interviews(
         self,
@@ -191,14 +231,65 @@ class InterviewService(BaseDbModelService[Interview]):
                 "Интервью уже завершено или отменено. Новые сообщения не принимаются."
             )
 
-        message = ChatMessage(
+        # Сохраняем сообщение пользователя
+        user_message = ChatMessage(
             interview_id=interview_id,
             sender=sender,
             text=text,
         )
-        self.session.add(message)
+        self.session.add(user_message)
+        await self.session.flush()
+
+        # Используем interview.id как session_id (должен совпадать с тем, что был передан при создании)
+        session_id = str(interview_id)
+        
+        # Вызываем ML API для обработки ответа
+        ml_response = await self.ml_client.process_message(
+            session_id=session_id,
+            user_answer=text,
+        )
+        
+        # Обновляем текущий шаг
+        await self._update_current_step(interview, ml_response, text)
+        
+        status = ml_response.get("status", "IN_PROGRESS")
+        
+        if status != "COMPLETED":
+            # Если интервью продолжается - создаем новый шаг
+            await self._process_ml_step(interview, ml_response)
+            interview.current_step_index += 1
+        else:
+            # Интервью завершено
+            interview.status = InterviewStatus.COMPLETED
+            interview.total_score = ml_response.get("score")
+            interview.overall_feedback = ml_response.get("ai_feedback") or ml_response.get("feedback")
+            
+            # Добавляем финальное сообщение от AI (фидбэк)
+            final_message_text = ml_response.get("ai_feedback") or ml_response.get("feedback")
+            if final_message_text:
+                final_message = ChatMessage(
+                    interview_id=interview.id,
+                    sender=MessageSender.AI,
+                    text=final_message_text,
+                )
+                self.session.add(final_message)
+
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
+
+    async def _update_current_step(self, interview: Interview, ml_response: dict[str, Any], user_answer: str):
+        """Обновляет текущий шаг интервью результатами ответа пользователя."""
+        current_step = next(
+            (s for s in interview.steps if s.status == InterviewStepStatus.IN_PROGRESS),
+            None
+        )
+        
+        if current_step:
+            current_step.status = InterviewStepStatus.COMPLETED
+            current_step.user_answer = ml_response.get("user_answer", user_answer)
+            current_step.feedback = ml_response.get("feedback")
+            current_step.score = ml_response.get("score")
+            await self.session.flush()
 
     async def submit_code(
         self,

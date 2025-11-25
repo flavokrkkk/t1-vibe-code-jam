@@ -16,6 +16,10 @@ class LoginSchema(BaseModel):
     password: str = Field(..., min_length=6)
 
 
+class RefreshTokenSchema(BaseModel):
+    refresh_token: str
+
+
 class TokenSchema(BaseModel):
     access_token: str
     refresh_token: str

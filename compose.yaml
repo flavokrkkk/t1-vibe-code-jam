@@ -41,9 +41,12 @@ services:
       APPLICATION_PORT: 8000
       SCIBOX_API_KEY: sk-9KZTGbeiILvRQ5g_Jc2lRQ
       SCIBOX_BASE_URL: https://llm.t1v.scibox.tech/v1
+      ML_API_URL: http://ml-service:8080
     depends_on:
       db: 
         condition: service_healthy
+      ml-service:
+        condition: service_started
     networks:
       - app-network
     ports:
@@ -51,6 +54,20 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn main:app --host 0.0.0.0 --port 8000"
+
+  ml-service:
+    build:
+      context: ML
+      dockerfile: Dockerfile
+    container_name: ml-service
+    environment:
+      SCIBOX_API_KEY: sk-9KZTGbeiILvRQ5g_Jc2lRQ
+      SCIBOX_BASE_URL: https://llm.t1v.scibox.tech/v1
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge

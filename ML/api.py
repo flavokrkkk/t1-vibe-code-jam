@@ -23,6 +23,7 @@ class StartInterviewRequest(BaseModel):
     job_title: str = Field(..., min_length=1, max_length=200, description="Название вакансии")
     required_skills: list[str] = Field(..., min_length=1, description="Список требуемых навыков")
     amount_of_tasks: int = Field(..., ge=1, le=30, description="Количество вопросов в интервью")
+    session_id: str | None = Field(None, description="ID сессии (опционально, для синхронизации с бэкендом)")
 
 
 class InterviewStepResponse(BaseModel):
@@ -56,7 +57,15 @@ async def start_interview(request: StartInterviewRequest) -> StartInterviewRespo
     """Начало интервью - создание сессии и получение первого вопроса."""
     try:
         agent = InterviewAgent()
-        session_id = str(uuid4())
+        # Используем переданный session_id или генерируем новый
+        session_id = request.session_id or str(uuid4())
+        
+        # Проверяем, что session_id не занят
+        if session_id in agents:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Сессия с ID {session_id} уже существует"
+            )
         
         first_step = agent.start_interview(
             job_title=request.job_title,

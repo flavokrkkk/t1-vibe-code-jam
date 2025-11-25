@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     ASSEMBLYAI_API_KEY: str | None = None
 
+    ML_API_URL: str = "http://localhost:8080"
+
     model_config = SettingsConfigDict(
         env_file="../.env",
         env_file_encoding="utf-8",
