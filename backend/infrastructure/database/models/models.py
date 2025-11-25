@@ -80,6 +80,7 @@ class User(Base):
 
     interviews: Mapped[list["Interview"]] = relationship(
         "Interview",
+        foreign_keys="Interview.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -99,6 +100,12 @@ class Interview(Base):
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
     )
+    creator_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     job_role_description: Mapped[str] = mapped_column(Text)
     amount_of_tasks: Mapped[int] = mapped_column(Integer)
     key_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -110,8 +117,18 @@ class Interview(Base):
     )
     total_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     overall_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_token: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False,
+    )
 
-    user: Mapped["User"] = relationship("User", back_populates="interviews")
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="interviews",
+    )
     steps: Mapped[list["InterviewStep"]] = relationship(
         "InterviewStep",
         back_populates="interview",

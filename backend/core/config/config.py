@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     APPLICATION_PORT: int = 8000
     DEBUG: bool = False
-
+    BASE_URL: str = "http://localhost:8000"
+    
     DB_HOST: str
     DB_PORT: int
     DB_USER: str

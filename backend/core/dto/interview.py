@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from core.config.config import settings
+
 
 class CreateInterviewSchema(BaseModel):
     """Схема создания интервью."""
@@ -118,6 +120,7 @@ class ChatMessagesSchema(BaseModel):
 class BaseInterviewSchema(BaseModel):
     id: UUID
     user_id: UUID
+    creator_id: UUID
     job_role_description: str
     status: str
     created_at: datetime
@@ -131,6 +134,12 @@ class BaseInterviewSchema(BaseModel):
     overall_feedback: str | None
     created_at: datetime
     updated_at: datetime
+    public_token: str
+
+    @field_validator("public_token")
+    @classmethod
+    def validate_public_token(cls, v: str) -> str:
+        return f"{settings.BASE_URL}/api/v1/interview/claim/{v}"
 
 
 class ListInterviewItemSchema(BaseInterviewSchema):

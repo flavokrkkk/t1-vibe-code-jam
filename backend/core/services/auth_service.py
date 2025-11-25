@@ -97,6 +97,7 @@ class AuthService(BaseDbModelService[User]):
         
         self.session.add(new_user)
         await self.session.commit()
+        await self.session.refresh(new_user)
         
         access_token = self._create_access_token(new_user)
         refresh_token = self._create_refresh_token(new_user)

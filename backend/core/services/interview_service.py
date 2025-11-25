@@ -4,15 +4,15 @@ import asyncio
 import logging
 import random
 from uuid import UUID
+import uuid
 
 from fastapi import UploadFile
 import httpx
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from core.services.base import BaseDbModelService
-from core.dto.interview import BaseInterviewSchema, InterviewSchema, ListInterviewItemSchema
+from core.dto.interview import InterviewSchema, ListInterviewItemSchema
 from core.config.config import settings
 from infrastructure.errors.base import BadRequestException, NotFoundException
 from infrastructure.database.models.models import (
@@ -39,15 +39,18 @@ class InterviewService(BaseDbModelService[Interview]):
         key_skills: list[str] | None = None,
         preferences: str | None = None,
     ) -> InterviewSchema:
-        """Создание нового интервью."""
+        public_token = str(uuid.uuid4())
+        
         interview = Interview(
             user_id=user_id,
+            creator_id=user_id,
             job_role_description=job_role_description,
             amount_of_tasks=amount_of_tasks,
             key_skills=key_skills or [],
             preferences=preferences,
             current_step_index=0,
             status=InterviewStatus.IN_PROGRESS,
+            public_token=public_token,
         )
         self.session.add(interview)
         await self.session.flush()
@@ -97,15 +100,59 @@ class InterviewService(BaseDbModelService[Interview]):
             interviews_list.append(ListInterviewItemSchema.model_validate(interview, from_attributes=True))
         return interviews_list
 
+    async def find_interview_by_token(
+        self,
+        public_token: str,
+    ) -> Interview:
+        """Поиск интервью по публичному токену."""
+        result = await self.session.execute(
+            select(Interview)
+            .where(Interview.public_token == public_token)
+            .options(
+                selectinload(Interview.steps).selectinload(InterviewStep.code_task),
+                selectinload(Interview.steps).selectinload(
+                    InterviewStep.code_test_results
+                ),
+                selectinload(Interview.chat_messages),
+            )
+        )
+        interview = result.scalar_one_or_none()
+        if not interview:
+            raise NotFoundException("Интервью не найдено.")
+        return interview
+
+    async def claim_interview(
+        self,
+        public_token: str,
+        user_id: UUID,
+    ) -> Interview:
+        result = await self.session.execute(
+            select(Interview)
+            .where(Interview.public_token == public_token)
+        )
+        interview = result.scalar_one_or_none()
+        
+        if not interview:
+            raise NotFoundException("Интервью не найдено.")
+        
+        if interview.user_id == user_id:
+            raise BadRequestException("Вы уже приняли приглашение.")
+        
+        interview.user_id = user_id
+        await self.session.commit()
+        await self.session.refresh(interview)
+        
+        interview = await self.find_interview_by_id(interview.id, None)
+        return InterviewSchema.model_validate(interview, from_attributes=True)
+
     async def find_interview_by_id(
         self,
         interview_id: UUID,
         user_id: UUID | None = None,
     ) -> Interview:
-        """Получение интервью по ID."""
         query = select(Interview).where(Interview.id == interview_id)
         if user_id:
-            query = query.where(Interview.user_id == user_id)
+            query = query.where(or_(Interview.user_id == user_id, Interview.creator_id == user_id))
 
         result = await self.session.execute(
             query.options(
@@ -134,7 +181,6 @@ class InterviewService(BaseDbModelService[Interview]):
         sender: MessageSender,
         text: str,
     ) -> Interview:
-        """Сохранение сообщения чата в БД."""
         interview = await self.find_interview_by_id(interview_id, None)
 
         if interview.status in [
@@ -160,7 +206,6 @@ class InterviewService(BaseDbModelService[Interview]):
         step_id: UUID,
         user_code: str,
     ) -> Interview:
-        """Сохранение кода для шага интервью в БД."""
         interview = await self.find_interview_by_id(interview_id, None)
 
         if interview.status != InterviewStatus.IN_PROGRESS:
@@ -215,7 +260,6 @@ class InterviewService(BaseDbModelService[Interview]):
         return await self.find_interview_by_id(interview_id, None)
 
     async def _transcribe_audio(self, audio_buffer: bytes) -> str:
-        """Распознавание аудио в текст с помощью AssemblyAI API."""
         api_key = settings.ASSEMBLYAI_API_KEY
 
         if not api_key:

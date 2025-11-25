@@ -36,6 +36,17 @@ async def create_interview(
     )
 
 
+@router.get(
+    "/claim/",
+    responses={**error_response(NotFoundException), **error_response(BadRequestException)},
+)
+async def claim_interview_by_link(
+    public_token: str,
+    current_user: Annotated[BaseUserSchema, Depends(get_current_user_dependency)],
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    return await interview_service.claim_interview(public_token, current_user.id)
+
 
 @router.get(
     "/{interview_id}", responses={**error_response(NotFoundException)}
