@@ -37,6 +37,8 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 Правила проведения интервью:
 - Будь дружелюбным и профессиональным
 - Задавай вопросы последовательно, не перескакивай с темы на тему
+- ВСЕГДА помни контекст предыдущих вопросов и ответов - НЕ начинай интервью заново, НЕ задавай первый вопрос повторно
+- Если кандидат ответил на твой вопрос - анализируй его ответ и либо задавай уточняющий вопрос, либо переходи к следующему вопросу
 - Если ответ неполный или требует уточнения, задавай уточняющие вопросы для получения дополнительной информации
 - Оценивай не только технические знания, но и способ мышления и подход к решению задач
 - После каждого ответа давай краткую обратную связь или переходи к следующему вопросу
@@ -223,12 +225,19 @@ class InterviewAgent:
         if not first_question:
             raise RuntimeError("Пустой ответ от модели")
         
+        first_question_cleaned = re.sub(r'<think>.*?</think>', '', first_question, flags=re.DOTALL | re.IGNORECASE)
+        first_question_cleaned = re.sub(r'<reasoning>.*?</reasoning>', '', first_question_cleaned, flags=re.DOTALL | re.IGNORECASE)
+        first_question_cleaned = first_question_cleaned.strip()
+        
+        if not first_question_cleaned:
+            first_question_cleaned = first_question
+        
         self.conversation_history.append(HumanMessage(content="Начни интервью"))
-        self.conversation_history.append(AIMessage(content=first_question))
+        self.conversation_history.append(AIMessage(content=first_question_cleaned))
         
         return {
             "type": "DIALOG",
-            "question_text": first_question,
+            "question_text": first_question_cleaned,
             "status": "IN_PROGRESS",
             "score": None,
             "ai_feedback": None,
@@ -253,11 +262,11 @@ class InterviewAgent:
         
         chat_history_messages = []
         for msg in self.conversation_history:
-            if isinstance(msg, (HumanMessage, SystemMessage)):
+            if isinstance(msg, (HumanMessage, AIMessage, SystemMessage)):
                 chat_history_messages.append(msg)
         
         result = agent.invoke({
-            "input": f"Кандидат ответил: {user_answer}. Проанализируй ответ и продолжай интервью. Можешь задать уточняющие вопросы, если нужно. Если ответ хороший, можешь перейти к следующему вопросу.",
+            "input": f"Кандидат ответил на твой предыдущий вопрос: '{user_answer}'. Проанализируй этот ответ и продолжай интервью. НЕ начинай интервью заново, НЕ задавай первый вопрос снова. Если ответ требует уточнения - задай уточняющий вопрос. Если ответ хороший и полный - переходи к следующему вопросу по навыкам. Помни контекст предыдущих вопросов и ответов.",
             "chat_history": chat_history_messages
         })
         
@@ -269,17 +278,25 @@ class InterviewAgent:
             self.interview_ended = True
             ai_response = re.sub(r'\[ЗАВЕРШЕНИЕ ИНТЕРВЬЮ\]|\[END_INTERVIEW\]', '', ai_response, flags=re.IGNORECASE).strip()
         
-        self.conversation_history.append(HumanMessage(content=user_answer))
-        self.conversation_history.append(AIMessage(content=ai_response))
+        ai_response_cleaned = re.sub(r'<think>.*?</think>', '', ai_response, flags=re.DOTALL | re.IGNORECASE)
+        ai_response_cleaned = re.sub(r'<think>.*?</think>', '', ai_response_cleaned, flags=re.DOTALL | re.IGNORECASE)
+        ai_response_cleaned = re.sub(r'<reasoning>.*?</reasoning>', '', ai_response_cleaned, flags=re.DOTALL | re.IGNORECASE)
+        ai_response_cleaned = ai_response_cleaned.strip()
         
-        parsed = self._parse_ai_response(ai_response)
+        if not ai_response_cleaned:
+            ai_response_cleaned = ai_response
+        
+        self.conversation_history.append(HumanMessage(content=user_answer))
+        self.conversation_history.append(AIMessage(content=ai_response_cleaned))
+        
+        parsed = self._parse_ai_response(ai_response_cleaned)
         
         return {
             "type": "DIALOG",
-            "question_text": ai_response,
+            "question_text": ai_response_cleaned,
             "status": "COMPLETED" if self.interview_ended else "IN_PROGRESS",
             "score": parsed.get("score"),
-            "ai_feedback": parsed.get("feedback") or ai_response,
+            "ai_feedback": parsed.get("feedback") or ai_response_cleaned,
             "user_answer": user_answer,
             "feedback": parsed.get("feedback")
         }
