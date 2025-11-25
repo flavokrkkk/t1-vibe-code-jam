@@ -68,7 +68,7 @@ class SubmitCodeSchema(BaseModel):
     )
 
 
-class CodeTestResultResponse(BaseModel):
+class CodeTestResultSchema(BaseModel):
     """Схема результата теста кода."""
 
     id: UUID
@@ -76,11 +76,8 @@ class CodeTestResultResponse(BaseModel):
     status: str
     details: str | None
 
-    class Config:
-        from_attributes = True
 
-
-class CodeTaskResponse(BaseModel):
+class CodeTaskSchema(BaseModel):
     """Схема кодовой задачи."""
 
     id: UUID
@@ -89,18 +86,14 @@ class CodeTaskResponse(BaseModel):
     language: str
     test_cases: dict[str, Any]
 
-    class Config:
-        from_attributes = True
 
-
-class InterviewStepResponse(BaseModel):
+class InterviewStepSchema(BaseModel):
     """Схема шага интервью."""
 
     id: UUID
     type: str
     status: str
     score: int | None
-    ai_feedback: str | None
     question_text: str | None
     user_answer: str | None
     feedback: str | None
@@ -109,31 +102,26 @@ class InterviewStepResponse(BaseModel):
     code_feedback: str | None
     code_score: int | None
     created_at: datetime
-    code_task: CodeTaskResponse | None = None
-    code_test_results: list[CodeTestResultResponse] = []
-
-    class Config:
-        from_attributes = True
+    code_task: CodeTaskSchema | None = None
+    code_test_results: list[CodeTestResultSchema] = []
 
 
-class ChatMessageResponse(BaseModel):
+class ChatMessagesSchema(BaseModel):
     """Схема сообщения чата."""
 
     id: UUID
     sender: str
     text: str
-    timestamp: datetime
-
-    class Config:
-        from_attributes = True
+    created_at: datetime
 
 
-class InterviewResponse(BaseModel):
-    """Схема интервью."""
-
+class BaseInterviewSchema(BaseModel):
     id: UUID
     user_id: UUID
     job_role_description: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
     amount_of_tasks: int
     key_skills: list[str] = []
     preferences: str | None = None
@@ -143,8 +131,14 @@ class InterviewResponse(BaseModel):
     overall_feedback: str | None
     created_at: datetime
     updated_at: datetime
-    steps: list[InterviewStepResponse] = []
-    chat_messages: list[ChatMessageResponse] = []
 
-    class Config:
-        from_attributes = True
+
+class ListInterviewItemSchema(BaseInterviewSchema):
+    steps_count: int
+    chat_messages_count: int
+    
+
+class InterviewSchema(BaseInterviewSchema):
+    steps: list[InterviewStepSchema] = []
+    chat_messages: list[ChatMessagesSchema] = []
+

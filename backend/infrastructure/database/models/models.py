@@ -15,13 +15,11 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 
-from db.session import Base
 
 
 class InterviewStatus(str, enum.Enum):
-    """Статус интервью."""
 
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -30,14 +28,12 @@ class InterviewStatus(str, enum.Enum):
 
 
 class InterviewStepType(str, enum.Enum):
-    """Тип шага интервью."""
 
     DIALOG = "DIALOG"
     CODE_TASK = "CODE_TASK"
 
 
 class InterviewStepStatus(str, enum.Enum):
-    """Статус шага интервью."""
 
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -45,7 +41,6 @@ class InterviewStepStatus(str, enum.Enum):
 
 
 class CodeTestResultStatus(str, enum.Enum):
-    """Статус результата теста кода."""
 
     PASSED = "PASSED"
     FAILED = "FAILED"
@@ -53,25 +48,13 @@ class CodeTestResultStatus(str, enum.Enum):
 
 
 class MessageSender(str, enum.Enum):
-    """Отправитель сообщения."""
 
     USER = "USER"
     AI = "AI"
 
 
-class User(Base):
-    """Модель пользователя."""
 
-    __tablename__ = "user"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-    email: Mapped[str] = mapped_column(String, unique=True, index=True)
-    username: Mapped[str] = mapped_column(String)
-    password_hash: Mapped[str] = mapped_column(String)
+class Base(DeclarativeBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -82,6 +65,19 @@ class User(Base):
         onupdate=func.now(),
     )
 
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    username: Mapped[str] = mapped_column(String)
+    password_hash: Mapped[str] = mapped_column(String)
+
     interviews: Mapped[list["Interview"]] = relationship(
         "Interview",
         back_populates="user",
@@ -89,8 +85,7 @@ class User(Base):
     )
 
 
-class Interview(Base):
-    """Модель интервью."""
+class Interview(Base):  
 
     __tablename__ = "interview"
 
@@ -115,15 +110,6 @@ class Interview(Base):
     )
     total_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     overall_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
 
     user: Mapped["User"] = relationship("User", back_populates="interviews")
     steps: Mapped[list["InterviewStep"]] = relationship(
@@ -136,12 +122,11 @@ class Interview(Base):
         "ChatMessage",
         back_populates="interview",
         cascade="all, delete-orphan",
-        order_by="ChatMessage.timestamp",
+        order_by="ChatMessage.created_at",
     )
 
 
 class CodeTask(Base):
-    """Модель кодовой задачи."""
 
     __tablename__ = "codetask"
 
@@ -162,7 +147,6 @@ class CodeTask(Base):
 
 
 class InterviewStep(Base):
-    """Модель шага интервью."""
 
     __tablename__ = "interviewstep"
 
@@ -182,7 +166,6 @@ class InterviewStep(Base):
         default=InterviewStepStatus.PENDING,
     )
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    ai_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -196,11 +179,6 @@ class InterviewStep(Base):
     user_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     code_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     code_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
 
     interview: Mapped["Interview"] = relationship(
         "Interview",
@@ -218,7 +196,6 @@ class InterviewStep(Base):
 
 
 class CodeTestResult(Base):
-    """Модель результата теста кода."""
 
     __tablename__ = "codetestresult"
 
@@ -245,8 +222,6 @@ class CodeTestResult(Base):
 
 
 class ChatMessage(Base):
-    """Модель сообщения чата."""
-
     __tablename__ = "chatmessage"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -261,10 +236,6 @@ class ChatMessage(Base):
     )
     sender: Mapped[MessageSender] = mapped_column(SQLEnum(MessageSender))
     text: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
 
     interview: Mapped["Interview"] = relationship(
         "Interview",

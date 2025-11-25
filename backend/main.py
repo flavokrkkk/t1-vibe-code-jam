@@ -6,27 +6,26 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.config import settings
-from core.logging import setup_logging
-from db.session import engine, Base
-from api.v1.router import api_router
+from core.config.config import settings
+from core.config.logging import setup_logging
+from infrastructure.database.adapters.pg_connection import DatabaseConnection
+from api.v1.routers import api_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения."""
     setup_logging()
     logger = logging.getLogger(__name__)
     logger.info("Starting application...")
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    db_connection = DatabaseConnection()
+    app.state.db_connection = db_connection
+    await db_connection.create_all_tables()
 
     logger.info("Application started successfully")
     yield
-    # Shutdown
     logger.info("Shutting down application...")
-    await engine.dispose()
+    await db_connection.close()
     logger.info("Application shut down")
 
 
@@ -34,9 +33,6 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="AI Interview Assistant Backend API",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
 
@@ -48,16 +44,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router, prefix="/api")
-
-
-@app.get("/")
-async def root():
-    """Корневой эндпоинт."""
-    return {"message": "Hello World!", "version": settings.VERSION}
-
-
-@app.get("/health")
-async def health_check():
-    """Health check эндпоинт."""
-    return {"status": "healthy", "version": settings.VERSION}
+app.include_router(api_router)

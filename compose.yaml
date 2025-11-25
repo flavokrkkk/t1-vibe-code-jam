@@ -1,77 +1,57 @@
-services:
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "5173:80"
-  #   restart: always
+version: '3.8'
 
+services:
   db:
-    image: postgres:16-alpine
-    container_name: ai-interview-db
+    image: postgres:15
+    container_name: db-store-1
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-ai_interview}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      
+  app:
+    build:
+      context: backend
+      dockerfile: ./Dockerfile
+    container_name: app-store-1
+    environment:
+      JWT_SECRET: 8f3a9b2c7d4e1f6a5b8c9d0e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+      JWT_ACCESS_TOKEN_TIME: 15
+      JWT_REFRESH_TOKEN_TIME: 7
+      JWT_ALGORITHM: HS256
+      DB_NAME: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      ASSEMBLYAI_API_KEY: b526d483f1b543778c65450cf60d1379
+      DEBUG: false
+      APPLICATION_PORT: 8000
+    depends_on:
+      db: 
+        condition: service_healthy
     networks:
       - app-network
-
-  api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-interview-api
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ai_interview}
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-      JWT_ACCESS_TOKEN_TIME: ${JWT_ACCESS_TOKEN_TIME:-15m}
-      JWT_REFRESH_TOKEN_TIME: ${JWT_REFRESH_TOKEN_TIME:-7d}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY:-}
-      DEBUG: ${DEBUG:-false}
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  migrations:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-interview-migrations
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ai_interview}
-    command: alembic upgrade head
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    networks:
-      - app-network
-    profiles:
-      - migrations
-
-volumes:
-  postgres_data:
-
+    # command: >
+    #   sh -c "alembic upgrade head &&
+    #          uvicorn app.main:app --host 0.0.0.0 --port 8000"
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
