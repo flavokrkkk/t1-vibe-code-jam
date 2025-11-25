@@ -5,9 +5,9 @@ if __name__ == "__main__":
         agent = InterviewAgent()
     except ValueError as e:
         print(f"Ошибка: {e}")
-        print("\nУстановите переменную окружения:")
-        print("export GROQ_API_KEY='your-api-key-here'")
-        print("Получить ключ: https://console.groq.com/keys")
+        print("\n Установите переменную окружения:")
+        print("export SCIBOX_API_KEY='your-api-key-here'")
+        print("export SCIBOX_BASE_URL='https://llm.t1v.scibox.tech/v1'")
         exit(1)
     
     job_title = "Python Developer"
@@ -40,9 +40,9 @@ if __name__ == "__main__":
     
     print("Генерация обратной связи...")
     feedback = agent.generate_feedback()
-    print(f"\n{'='*60}")
+    print('')
     print("ИТОГОВАЯ ОБРАТНАЯ СВЯЗЬ")
-    print(f"{'='*60}\n")
+    print("")
     print(feedback)
-    print(f"\n{'='*60}")
+    print('')
 

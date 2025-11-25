@@ -5,8 +5,8 @@ import os
 import re
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+from scibox_client import SciBoxClient
+from scibox_config import DEFAULT_CHAT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
     """Генерация системного промпта для интервью."""
     skills_text = ", ".join(required_skills) if required_skills else "не указаны"
     
-    return f"""Ты профессиональный интервьюер, проводящий техническое интервью для вакансии "{job_title}".
+    return f"""/no_think Ты профессиональный интервьюер, проводящий техническое интервью для вакансии "{job_title}".
 
 Твоя задача:
 1. Провести структурированное интервью, оценивая кандидата по следующим навыкам: {skills_text}
@@ -54,23 +54,13 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 class InterviewAgent:
     """ИИ-агент для проведения интервью с инструментами."""
 
-    def __init__(self, api_key: str | None = None, model: str = "llama-3.3-70b-versatile"):
+    def __init__(self, api_key: str | None = None, model: str = DEFAULT_CHAT_MODEL):
         """Инициализация агента."""
         if api_key is None:
-            api_key = os.getenv("GROQ_API_KEY")
-        
+            api_key = os.getenv("SCIBOX_API_KEY")
         if not api_key:
-            raise ValueError(
-                "Groq API key не указан. Установите переменную окружения GROQ_API_KEY "
-                "или передайте api_key при создании агента. "
-                "Получить ключ: https://console.groq.com/keys"
-            )
-        
-        self.client = ChatGroq(
-            model=model,
-            temperature=0.7,
-            groq_api_key=api_key,
-        )
+            raise ValueError("SciBox API key обязателен. Установите SCIBOX_API_KEY или передайте api_key.")
+        self.client = SciBoxClient(api_key=api_key)
         self.model_name = model
         self.conversation_history: list[dict[str, Any]] = []
         self.interview_ended = False
@@ -105,25 +95,30 @@ class InterviewAgent:
         self.feedback_generated = False
         
         messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Начни интервью. Представься и задай первый вопрос кандидату."),
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Начни интервью. Представься и задай первый вопрос кандидату."},
         ]
         
         try:
-            response = self.client.invoke(messages)
-            first_question = response.content
+            response = self.client.chat_completion(
+                messages=messages,
+                model=self.model_name,
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=512,
+            )
+            first_question = response.choices[0].message.content
             if not first_question:
                 raise RuntimeError("Пустой ответ от модели")
         except Exception as e:
             error_msg = str(e)
-            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower() or "429" in error_msg:
                 raise RuntimeError(
-                    "Превышена квота API. Проверьте лимиты на "
-                    "https://console.groq.com"
+                    "Превышена квота API. Уменьшите частоту запросов или подождите."
                 ) from e
-            elif "authentication" in error_msg.lower() or "api_key" in error_msg.lower():
+            elif "authentication" in error_msg.lower() or "api_key" in error_msg.lower() or "401" in error_msg:
                 raise RuntimeError(
-                    "Ошибка аутентификации. Проверьте правильность Groq API ключа."
+                    "Ошибка аутентификации. Проверьте правильность SciBox API ключа."
                 ) from e
             raise
         
@@ -139,29 +134,30 @@ class InterviewAgent:
         if self.interview_ended:
             return "Интервью уже завершено."
         
-        system_prompt = self.conversation_history[0]["content"]
+        messages = []
         
-        messages = [SystemMessage(content=system_prompt)]
+        for msg in self.conversation_history:
+            if msg["role"] in ["system", "user", "assistant"]:
+                messages.append({"role": msg["role"], "content": msg["content"]})
         
-        for msg in self.conversation_history[1:]:
-            if msg["role"] == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
-            elif msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-        
-        messages.append(HumanMessage(content=f"Кандидат ответил: {user_answer}. Проанализируй ответ и продолжай интервью. Можешь задать уточняющие вопросы, если нужно."))
+        messages.append({"role": "user", "content": f"Кандидат ответил: {user_answer}. Проанализируй ответ и продолжай интервью. Можешь задать уточняющие вопросы, если нужно."})
         
         try:
-            response = self.client.invoke(messages)
-            ai_response = response.content
+            response = self.client.chat_completion(
+                messages=messages,
+                model=self.model_name,
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=512,
+            )
+            ai_response = response.choices[0].message.content
             if not ai_response:
                 raise RuntimeError("Пустой ответ от модели")
         except Exception as e:
             error_msg = str(e)
-            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower() or "429" in error_msg:
                 raise RuntimeError(
-                    "Превышена квота API. Проверьте лимиты на "
-                    "https://console.groq.com"
+                    "Превышена квота API. Уменьшите частоту запросов или подождите."
                 ) from e
             raise
         
@@ -184,31 +180,33 @@ class InterviewAgent:
 
     def generate_feedback(self) -> str:
         """Генерация итоговой обратной связи на основе всего интервью."""
-        system_prompt = self.conversation_history[0]["content"]
+        messages = []
         
-        messages = [SystemMessage(content=system_prompt)]
+        for msg in self.conversation_history:
+            if msg["role"] in ["system", "user", "assistant"]:
+                messages.append({"role": msg["role"], "content": msg["content"]})
         
-        for msg in self.conversation_history[1:]:
-            if msg["role"] == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
-            elif msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-        
-        messages.append(HumanMessage(
-            content="Интервью завершено. Предоставь итоговую обратную связь по кандидату, включая оценку по каждому навыку, сильные стороны, области для улучшения и рекомендации."
-        ))
+        messages.append({
+            "role": "user",
+            "content": "Интервью завершено. Предоставь итоговую обратную связь по кандидату, включая оценку по каждому навыку, сильные стороны, области для улучшения и рекомендации."
+        })
         
         try:
-            response = self.client.invoke(messages)
-            feedback = response.content
+            response = self.client.chat_completion(
+                messages=messages,
+                model=self.model_name,
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=1024,
+            )
+            feedback = response.choices[0].message.content
             if not feedback:
                 raise RuntimeError("Пустой ответ от модели")
         except Exception as e:
             error_msg = str(e)
-            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+            if "quota" in error_msg.lower() or "rate limit" in error_msg.lower() or "429" in error_msg:
                 raise RuntimeError(
-                    "Превышена квота API. Проверьте лимиты на "
-                    "https://console.groq.com"
+                    "Превышена квота API. Уменьшите частоту запросов или подождите."
                 ) from e
             raise
         
