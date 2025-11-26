@@ -124,10 +124,8 @@ const InterviewHistoryPage = () => {
           </div>
         </div>
 
-        {/* Табы */}
         <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
           <div className="relative flex">
-            {/* Ползунок */}
             <motion.div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl"
               initial={false}
@@ -141,8 +139,6 @@ const InterviewHistoryPage = () => {
                 damping: 30,
               }}
             />
-
-            {/* Кнопки табов */}
             <button
               type="button"
               onClick={() => setActiveTab("my")}
@@ -198,7 +194,10 @@ const InterviewHistoryPage = () => {
             {currentInterviews.length === 0 ? (
               <div className="bg-white rounded-4xl p-12 text-center">
                 <div className="bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                  <Briefcase className="w-10 h-10 text-gray-400" />
+                  <Image
+                    src="/images/D_BenefitIcon_48x48_291024-min.webp"
+                    alt="interview-icon"
+                  />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {activeTab === "my"
@@ -222,7 +221,6 @@ const InterviewHistoryPage = () => {
                   const progress =
                     totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
-                  // Определяем тип интервью
                   const isMyInterview =
                     currentUser && interview.user_id === currentUser.id;
                   const isSharedInterview =
@@ -230,13 +228,9 @@ const InterviewHistoryPage = () => {
                     interview.creator_id === currentUser.id &&
                     interview.user_id !== currentUser.id;
 
-                  // Проверяем, завершено ли интервью
                   const isCompleted =
                     interview.status === InterviewStatus.COMPLETED;
 
-                  // Логика отображения кнопки:
-                  // - Мое интервью: всегда показываем кнопку
-                  // - Интервью по моей ссылке: показываем только если завершено
                   const shouldShowButton =
                     isMyInterview || (isSharedInterview && isCompleted);
 
@@ -244,12 +238,10 @@ const InterviewHistoryPage = () => {
 
                   const handleButtonClick = () => {
                     if (isMyInterview && !isCompleted) {
-                      // Мое интервью, не завершено - переходим на страницу интервью
                       navigate(
                         `/${ERouteNames.DASHBOARD_ROUTE}/interview/${interview.id}`
                       );
                     }
-                    // Для остальных случаев (завершенные интервью) пока ничего не делаем
                   };
 
                   return (

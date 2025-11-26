@@ -242,7 +242,12 @@ class InterviewService(BaseDbModelService[Interview]):
             )
             .join(InterviewStep, InterviewStep.interview_id == Interview.id)
             .join(ChatMessage, ChatMessage.interview_id == Interview.id)
-            .where(Interview.user_id == user_id)
+            .where(
+                or_(
+                    Interview.user_id == user_id,
+                    Interview.creator_id == user_id,
+                )
+            )
             .group_by(Interview.id)
             .order_by(Interview.created_at.desc())
         )
