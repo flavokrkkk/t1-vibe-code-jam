@@ -277,7 +277,7 @@ async def process_message_stream(request: MessageRequest):
                 
                 try:
                     full_code_task = agent.generate_code_task(topic, difficulty, language)
-                    question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                    question_text = answer_text or "Переходим к кодовой задаче."
                 except Exception as e:
                     logger.error(f"Ошибка генерации задачи: {e}")
                     question_text = answer_text or "Переходим к кодовой задаче."
@@ -383,7 +383,7 @@ async def process_message_stream(request: MessageRequest):
                 
                 try:
                     full_code_task = agent.generate_code_task(topic, difficulty, language)
-                    question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                    question_text = answer_text or "Переходим к кодовой задаче."
                 except Exception as e:
                     logger.error(f"Ошибка генерации задачи: {e}")
                     question_text = answer_text or "Переходим к кодовой задаче."

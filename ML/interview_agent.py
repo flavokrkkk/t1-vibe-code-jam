@@ -85,18 +85,21 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 #### 1. dialog_response — продолжить диалог
 
-- Используй для:
+- Используй **ТОЛЬКО** для:
 
-  - Ответов на вопросы пользователя.
+  - Уточнения: "У вас остались вопросы? Если нет — можем завершить интервью." (после последнего шага, когда ждем подтверждения завершения)
 
-  - Уточнения: "У вас остались вопросы? Если нет — можем завершить интервью."
+- **КРИТИЧЕСКИ ВАЖНО**: 
+  - Если это НЕ последний шаг — **НИКОГДА** не используй `dialog_response`
+  - Если кандидат задал вопрос или ответил на твой вопрос — используй `new_step` с `nextStep.questionText` для следующего вопроса
+  - `dialog_response` используй ТОЛЬКО когда уже спросил "У вас остались вопросы?" и ждешь ответа
 
 - answerText: **1–2 предложения**, вежливо, профессионально.
 
 ```json
 {{
   "type": "dialog_response",
-  "answerText": "Да, в нашей команде используют TypeScript. У вас остались вопросы? Если нет — можем завершить интервью."
+  "answerText": "У вас остались вопросы? Если нет — можем завершить интервью."
 }}
 ```
 
@@ -614,6 +617,29 @@ class InterviewAgent:
                 "next_step": None
             }
         
+        # Обработка пустых ответов
+        if not user_answer or not user_answer.strip():
+            # Если ждем подтверждения завершения и получили пустой ответ, 
+            # даем модели самой решить, что это значит
+            if self.waiting_for_completion_confirmation:
+                user_answer = ""  # Оставляем пустым, модель сама решит
+            else:
+                # Если не ждем завершения, пустой ответ - это просто пауза, 
+                # не нужно на это реагировать, просто вернем текущее состояние
+                return {
+                    "type": "DIALOG",
+                    "question_text": "Пожалуйста, введите ваш ответ.",
+                    "status": "IN_PROGRESS",
+                    "score": None,
+                    "ai_feedback": None,
+                    "user_answer": "",
+                    "feedback": None,
+                    "next_step": {
+                        "type": "DIALOG",
+                        "question_text": "Пожалуйста, введите ваш ответ."
+                    }
+                }
+        
         code_submission = self._parse_code_submission(user_answer)
         if code_submission:
             input_prompt = f"""Кандидат отправил код для задачи.
@@ -666,7 +692,7 @@ class InterviewAgent:
                     
                     try:
                         full_code_task = self.generate_code_task(topic, difficulty, language)
-                        question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                        question_text = answer_text or "Переходим к кодовой задаче."
                     except Exception as e:
                         logger.error(f"Ошибка генерации задачи: {e}")
                         question_text = answer_text or "Переходим к кодовой задаче."
@@ -781,30 +807,23 @@ class InterviewAgent:
 - НЕ хвали кандидата за ответ, которого он не дал
 {warning_text}"""
         else:
-            is_completion_confirmation = any(phrase in user_answer_lower for phrase in [
-                "нет вопросов", "нет", "можно завершать", "можно завершить",
-                "завершаем", "завершить", "готов", "всё", "все"
-            ]) and len(user_answer_lower) < 50
-            
             if self.waiting_for_completion_confirmation:
-                if is_completion_confirmation:
-                    input_prompt = f"""{context_info}
+                # Модель сама должна решить, хочет ли пользователь завершить интервью
+                if not user_answer or not user_answer.strip():
+                    # Пустой ответ при ожидании завершения - считаем подтверждением
+                    user_answer = "нет вопросов"
+                
+                input_prompt = f"""{context_info}
 
-Кандидат подтвердил завершение интервью: '{user_answer}'.
+Ты спросил кандидата: "У вас остались вопросы? Если нет — можем завершить интервью."
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `final_feedback`
-- Предоставь итоговую обратную связь по всему интервью
-- Включи оценку по каждому навыку, сильные стороны, области для улучшения"""
-                else:
-                    input_prompt = f"""{context_info}
+Кандидат ответил: '{user_answer}'
 
-Кандидат задал вопрос: '{user_answer}'.
+ТВОЯ ЗАДАЧА - ПРОАНАЛИЗИРУЙ ОТВЕТ И ПРИМИ РЕШЕНИЕ:
+- Если кандидат явно или неявно говорит, что вопросов нет (например: "нет", "нет вопросов", "можно завершать", "давай завершим", "всё", "готово", "нет, пока", пустой ответ и т.д.) → используй тип `final_feedback`
+- Если кандидат задал вопрос или хочет что-то уточнить → используй тип `new_step`, ответь на вопрос, затем снова спроси "Ещё вопросы? Если нет — можем завершить."
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `dialog_response`
-- Ответь на вопрос кандидата
-- Затем снова спроси: 'Ещё вопросы? Если нет — можем завершить.'"""
+ВАЖНО: Анализируй смысл ответа, а не только точные слова. Если кандидат не задает вопрос, а просто отвечает на твой вопрос о завершении (включая пустой ответ) - это подтверждение завершения."""
             elif is_last_step:
                 input_prompt = f"""{context_info}
 
@@ -818,13 +837,14 @@ class InterviewAgent:
 
 Кандидат ответил на твой предыдущий вопрос следующим образом: '{user_answer}'.
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `new_step`
-- В `feedback` дай обратную связь по ответу (2 предложения)
-- В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
-- В `score` оцени ответ от 0 до 100
-- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)
-- **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
+        ТВОЯ ЗАДАЧА:
+        - **ОБЯЗАТЕЛЬНО** используй тип `new_step` (НЕ `dialog_response`)
+        - В `feedback` дай обратную связь по ответу (2 предложения)
+        - В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
+        - В `score` оцени ответ от 0 до 100
+        - В `nextStep` **ОБЯЗАТЕЛЬНО** задай следующий вопрос (DIALOG с questionText) или задачу на код (CODE_TASK)
+        - **КРИТИЧЕСКИ ВАЖНО**: Всегда должен быть следующий вопрос или задача, интервью не должно останавливаться
+        - **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
         
         messages = self._get_messages_with_history(input_prompt)
         response = self.llm.invoke(messages)
@@ -921,14 +941,107 @@ class InterviewAgent:
             
             return result
         else:
+            # dialog_response - нужно задать следующий вопрос, если это не последний шаг
             answer_text = parsed.get("answerText", "")
             
             if "остались вопросы" in answer_text.lower() or "ещё вопросы" in answer_text.lower():
                 self.waiting_for_completion_confirmation = True
+                next_question_text = answer_text
+            elif is_last_step and not self.waiting_for_completion_confirmation:
+                # Если это последний шаг, но еще не спрашивали про завершение
+                next_question_text = answer_text + "\n\nУ вас остались вопросы? Если нет — можем завершить интервью."
+                self.waiting_for_completion_confirmation = True
+            else:
+                # Нужно задать следующий вопрос - запрашиваем у модели
+                if not self.waiting_for_completion_confirmation:
+                    follow_up_prompt = f"""{context_info}
+
+Ты только что ответил на вопрос кандидата: '{answer_text}'.
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `new_step` для завершения текущего шага
+- В `answerText` кратко прокомментируй ответ кандидата (1-2 предложения)
+- В `feedback` дай обратную связь по ответу (2 предложения)
+- В `score` оцени ответ от 0 до 100
+- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)"""
+                    
+                    follow_up_messages = self._get_messages_with_history(follow_up_prompt)
+                    follow_up_response = self.llm.invoke(follow_up_messages)
+                    follow_up_text = follow_up_response.content if hasattr(follow_up_response, 'content') else str(follow_up_response)
+                    
+                    if follow_up_text:
+                        follow_up_parsed = self._parse_ai_response(follow_up_text)
+                        if follow_up_parsed.get("type") == "new_step":
+                            self.questions_asked += 1
+                            follow_up_next_step = follow_up_parsed.get("nextStep", {})
+                            follow_up_next_step_type = follow_up_next_step.get("type", InterviewStepType["DIALOG"])
+                            
+                            follow_up_answer_text = follow_up_parsed.get("answerText", "")
+                            follow_up_next_question_text = follow_up_next_step.get("questionText", "")
+                            
+                            full_code_task = None
+                            if follow_up_next_step_type == InterviewStepType["CODE_TASK"]:
+                                code_task = follow_up_next_step.get("codeTask", {})
+                                topic = code_task.get("topic", "Python")
+                                difficulty = code_task.get("difficulty", "medium")
+                                language = code_task.get("language", "python")
+                                
+                                try:
+                                    full_code_task = self.generate_code_task(topic, difficulty, language)
+                                    next_question_text = follow_up_answer_text or "Переходим к кодовой задаче."
+                                except Exception as e:
+                                    logger.error(f"Ошибка генерации задачи: {e}")
+                                    next_question_text = follow_up_answer_text or "Переходим к кодовой задаче."
+                                    full_code_task = {
+                                        "description": "Ошибка генерации задачи",
+                                        "initial_code": "",
+                                        "test_cases": [],
+                                        "topic": topic,
+                                        "difficulty": difficulty,
+                                        "language": language
+                                    }
+                                
+                                next_step_data = {
+                                    "type": "CODE_TASK",
+                                    "code_task": {
+                                        "topic": topic,
+                                        "difficulty": difficulty,
+                                        "language": language
+                                    }
+                                }
+                            else:
+                                next_question_text = follow_up_next_question_text or follow_up_answer_text
+                                if not next_question_text:
+                                    next_question_text = "Следующий вопрос."
+                                next_step_data = {
+                                    "type": "DIALOG",
+                                    "question_text": next_question_text
+                                }
+                            
+                            self.conversation_history.append(AIMessage(content=follow_up_text))
+                            
+                            result = {
+                                "type": "DIALOG" if follow_up_next_step_type == InterviewStepType["DIALOG"] else "CODE_TASK",
+                                "question_text": next_question_text,
+                                "status": "COMPLETED" if self.interview_ended else "IN_PROGRESS",
+                                "score": follow_up_parsed.get("score"),
+                                "ai_feedback": follow_up_answer_text,
+                                "user_answer": user_answer,
+                                "feedback": follow_up_parsed.get("feedback", ""),
+                                "next_step": next_step_data
+                            }
+                            
+                            if full_code_task:
+                                result["code_task"] = full_code_task
+                            
+                            return result
+                
+                # Если не удалось сгенерировать следующий вопрос, используем ответ как вопрос
+                next_question_text = answer_text
             
             return {
                 "type": "DIALOG",
-                "question_text": answer_text,
+                "question_text": next_question_text,
                 "status": "COMPLETED" if self.interview_ended else "IN_PROGRESS",
                 "score": None,
                 "ai_feedback": answer_text,
@@ -936,7 +1049,7 @@ class InterviewAgent:
                 "feedback": None,
                 "next_step": {
                     "type": "DIALOG",
-                    "question_text": answer_text
+                    "question_text": next_question_text
                 }
             }
 
@@ -1050,30 +1163,23 @@ class InterviewAgent:
 - НЕ хвали кандидата за ответ, которого он не дал
 {warning_text}"""
         else:
-            is_completion_confirmation = any(phrase in user_answer_lower for phrase in [
-                "нет вопросов", "нет", "можно завершать", "можно завершить",
-                "завершаем", "завершить", "готов", "всё", "все"
-            ]) and len(user_answer_lower) < 50
-            
             if self.waiting_for_completion_confirmation:
-                if is_completion_confirmation:
-                    input_prompt = f"""{context_info}
+                # Модель сама должна решить, хочет ли пользователь завершить интервью
+                if not user_answer or not user_answer.strip():
+                    # Пустой ответ при ожидании завершения - считаем подтверждением
+                    user_answer = "нет вопросов"
+                
+                input_prompt = f"""{context_info}
 
-Кандидат подтвердил завершение интервью: '{user_answer}'.
+Ты спросил кандидата: "У вас остались вопросы? Если нет — можем завершить интервью."
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `final_feedback`
-- Предоставь итоговую обратную связь по всему интервью
-- Включи оценку по каждому навыку, сильные стороны, области для улучшения"""
-                else:
-                    input_prompt = f"""{context_info}
+Кандидат ответил: '{user_answer}'
 
-Кандидат задал вопрос: '{user_answer}'.
+ТВОЯ ЗАДАЧА - ПРОАНАЛИЗИРУЙ ОТВЕТ И ПРИМИ РЕШЕНИЕ:
+- Если кандидат явно или неявно говорит, что вопросов нет (например: "нет", "нет вопросов", "можно завершать", "давай завершим", "всё", "готово", "нет, пока", пустой ответ и т.д.) → используй тип `final_feedback`
+- Если кандидат задал вопрос или хочет что-то уточнить → используй тип `new_step`, ответь на вопрос, затем снова спроси "Ещё вопросы? Если нет — можем завершить."
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `dialog_response`
-- Ответь на вопрос кандидата
-- Затем снова спроси: 'Ещё вопросы? Если нет — можем завершить.'"""
+ВАЖНО: Анализируй смысл ответа, а не только точные слова. Если кандидат не задает вопрос, а просто отвечает на твой вопрос о завершении (включая пустой ответ) - это подтверждение завершения."""
             elif is_last_step:
                 input_prompt = f"""{context_info}
 
@@ -1087,13 +1193,14 @@ class InterviewAgent:
 
 Кандидат ответил на твой предыдущий вопрос следующим образом: '{user_answer}'.
 
-ТВОЯ ЗАДАЧА:
-- Используй тип `new_step`
-- В `feedback` дай обратную связь по ответу (2 предложения)
-- В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
-- В `score` оцени ответ от 0 до 100
-- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)
-- **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
+        ТВОЯ ЗАДАЧА:
+        - **ОБЯЗАТЕЛЬНО** используй тип `new_step` (НЕ `dialog_response`)
+        - В `feedback` дай обратную связь по ответу (2 предложения)
+        - В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
+        - В `score` оцени ответ от 0 до 100
+        - В `nextStep` **ОБЯЗАТЕЛЬНО** задай следующий вопрос (DIALOG с questionText) или задачу на код (CODE_TASK)
+        - **КРИТИЧЕСКИ ВАЖНО**: Всегда должен быть следующий вопрос или задача, интервью не должно останавливаться
+        - **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
         
         messages = self._get_messages_with_history(input_prompt)
         full_response = ""
