@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies import get_current_user_dependency, get_interview_service
-from core.dto.interview import BanForCheatingSchema, ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema
+from core.dto.interview import BanForCheatingSchema, ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema, UpdateResultUrlSchema
 from core.dto.user import BaseUserSchema
 from infrastructure.database.models.models import MessageSender
 from utils.error_extra import error_response
@@ -180,3 +180,23 @@ async def ban_for_cheating(
     }
     """
     return await interview_service.ban_for_cheating(interview_id, data.reasons)
+
+
+@router.patch(
+    "/{interview_id}/result",
+    responses={**error_response(BadRequestException), **error_response(NotFoundException)}
+)
+async def update_result_url(
+    interview_id: UUID,
+    data: UpdateResultUrlSchema,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    """
+    Обновляет ссылку на PDF с результатами интервью.
+    
+    Request body:
+    {
+        "result_url": "https://example.com/results/interview_123.pdf"
+    }
+    """
+    return await interview_service.update_result_url(interview_id, data.result_url)

@@ -901,3 +901,16 @@ class InterviewService(BaseDbModelService[Interview]):
 
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
+
+    async def update_result_url(
+        self,
+        interview_id: UUID,
+        result_url: str,
+    ) -> Interview:
+        """Обновляет ссылку на PDF с результатами интервью."""
+        interview = await self.find_interview_by_id(interview_id, None)
+        
+        interview.result_url = result_url
+        
+        await self.session.commit()
+        return await self.find_interview_by_id(interview_id, None)

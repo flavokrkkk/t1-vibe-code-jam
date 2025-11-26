@@ -96,6 +96,30 @@ class BanForCheatingSchema(BaseModel):
         return v
 
 
+class UpdateResultUrlSchema(BaseModel):
+    """Схема обновления ссылки на результат (PDF)."""
+
+    result_url: str = Field(
+        ...,
+        min_length=10,
+        max_length=2000,
+        description="URL ссылка на PDF с результатами интервью",
+    )
+
+    @field_validator("result_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        """Валидация URL."""
+        if not v or not v.strip():
+            raise ValueError("URL не может быть пустым")
+        
+        # Базовая проверка что это похоже на URL
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("URL должен начинаться с http:// или https://")
+        
+        return v.strip()
+
+
 class CodeTestResultSchema(BaseModel):
     """Схема результата теста кода."""
 
@@ -160,6 +184,7 @@ class BaseInterviewSchema(BaseModel):
     public_token: str
     ban_reasons: list[str] | None = None
     banned_at: datetime | None = None
+    result_url: str | None = None
 
     @field_validator("public_token")
     @classmethod

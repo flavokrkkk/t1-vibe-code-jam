@@ -127,6 +127,7 @@ class Interview(Base):
     pending_next_step: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ban_reasons: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     banned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     user: Mapped["User"] = relationship(
         "User",
