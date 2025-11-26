@@ -19,7 +19,7 @@ const authApiConfig = {
   prefixUrl: API_BASE_URL,
   hooks: {
     beforeRequest: [
-      (request) => {
+      (request: Request) => {
         const token = getAccessToken();
         if (token) {
           request.headers.set("Authorization", `Bearer ${token}`);
@@ -27,7 +27,7 @@ const authApiConfig = {
       },
     ],
     afterResponse: [
-      async (request, options, response) => {
+      async (request: Request, options: RequestInit, response: Response) => {
         if (response.status === 401) {
           const refresh = getRefreshToken();
           if (!refresh) {
@@ -57,7 +57,7 @@ const authApiConfig = {
       },
     ],
   },
-  parseJson: (text) => JSON.parse(text),
+  parseJson: (text: string) => JSON.parse(text),
 };
 
 // Базовый API с обычным таймаутом для быстрых запросов

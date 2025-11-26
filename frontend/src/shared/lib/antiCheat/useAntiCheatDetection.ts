@@ -59,7 +59,7 @@ export const useAntiCheatDetection = ({
       window.removeEventListener("blur", handleBlur);
     };
   }, [enabled, reportViolation]);
-
+  console.log(interviewId);
   // Отслеживание DevTools
   useEffect(() => {
     if (!enabled) return;
@@ -220,4 +220,3 @@ export const useAntiCheatDetection = ({
     };
   }, [enabled, reportViolation]);
 };
-
