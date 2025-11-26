@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dto.user import BaseUserSchema
 from core.services.ml_client import MLClient
+from core.services.judge0_client import Judge0Client
 import core.services as services
 
 
@@ -40,14 +41,18 @@ async def get_current_user_dependency(
 async def get_ml_client() -> MLClient:
     return MLClient()
 
+async def get_judge0_client() -> Judge0Client:
+    return Judge0Client()
 
 async def get_interview_service(
     session=Depends(get_db_session),
     ml_client: MLClient = Depends(get_ml_client),
+    judge0_client: Judge0Client = Depends(get_judge0_client),
 ) -> services.InterviewService:
     return services.InterviewService(
         session=session,
-        ml_client=ml_client
+        ml_client=ml_client,
+        judge0_client=judge0_client
     )
 
 

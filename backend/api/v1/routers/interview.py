@@ -85,6 +85,18 @@ async def submit_code(
 
 
 @router.post(
+    "/{interview_id}/steps/{step_id}/skip",
+    responses={**error_response(NotFoundException), **error_response(BadRequestException)}
+)
+async def skip_step(
+    interview_id: UUID,
+    step_id: UUID,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    return await interview_service.skip_step(interview_id, step_id)
+
+
+@router.post(
     "/{interview_id}/audio",
     responses={**error_response(BadRequestException), **error_response(NotFoundException)}
 )

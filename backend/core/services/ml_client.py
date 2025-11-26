@@ -88,3 +88,38 @@ class MLClient:
             logger.error(f"Таймаут при вызове ML API: {e}")
             raise BadRequestException("ML сервис не отвечает. Попробуйте позже.") from e
 
+    async def generate_code_task(
+        self,
+        topic: str,
+        difficulty: str,
+        language: str = "python"
+    ) -> dict[str, Any]:
+        """
+        Запрос к ML сервису на генерацию новой задачи по теме.
+        """
+        url = f"{self.base_url}/generate_task"
+        payload = {
+            "topic": topic,
+            "difficulty": difficulty,
+            "language": language
+        }
+        
+        try:
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                async with session.post(url, json=payload) as response:
+                     if response.status >= 400:
+                        logger.warning(f"ML task generation failed or not implemented: {response.status}. Using fallback.")
+                        # If generation endpoint fails, we might return empty or mock
+                        return {} 
+                     return await response.json()
+        except Exception as e:
+             logger.error(f"Failed to generate task: {e}")
+             # In case of error, we can fallback to a very basic mock task or re-raise
+             return {
+                 "description": f"Write a function to solve a problem about {topic} ({difficulty}).",
+                 "initial_code": "def solve():\n    pass",
+                 "test_cases": [],
+                 "topic": topic,
+                 "difficulty": difficulty,
+                 "language": language
+             }

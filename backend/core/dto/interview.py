@@ -86,7 +86,7 @@ class CodeTaskSchema(BaseModel):
     description: str
     initial_code: str
     language: str
-    test_cases: dict[str, Any]
+    test_cases: list[dict[str, Any]]
 
 
 class InterviewStepSchema(BaseModel):
