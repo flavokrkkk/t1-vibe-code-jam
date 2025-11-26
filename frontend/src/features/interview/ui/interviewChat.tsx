@@ -199,7 +199,12 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
                 "flex-grow overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar w-full items-center"
               )}
             >
-              <div className="flex flex-col max-w-[800px] w-full min-w-0 p-2 px-4">
+              <div
+                className={cn(
+                  "flex flex-col max-w-[844px] w-full min-w-0 py-2 px-4",
+                  isCurrentStepCodeTask && "xl:px-10"
+                )}
+              >
                 {initialInterview.chat_messages.map((msg) => (
                   <ChatMessageBubble key={msg.id} message={msg} />
                 ))}
@@ -213,6 +218,7 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
 
             <ChatInput
               interviewId={initialInterview.id}
+              isCurrentStepCodeTask={isCurrentStepCodeTask}
               onSendMessage={handleSendMessage}
               isLoading={isAILoading}
             />

@@ -13,12 +13,14 @@ import { useInterviewAudioMessage } from "@/entities/interview/hooks/useIntervie
 interface ChatInputProps {
   isLoading: boolean;
   interviewId: string;
+  isCurrentStepCodeTask: boolean;
   onSendMessage: (message: string) => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   isLoading,
   interviewId,
+  isCurrentStepCodeTask,
   onSendMessage,
 }) => {
   const [message, setMessage] = useState("");
@@ -125,7 +127,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [message]);
 
   return (
-    <div className="md:px-4 lg:px-10 w-full max-w-[844px]">
+    <div
+      className={cn(
+        "w-full max-w-[844px] px-4",
+        isCurrentStepCodeTask && "xl:px-10"
+      )}
+    >
       <div className="mx-auto px-4 md:px-0 pb-4 rounded-4xl relative">
         <div className="relative overflow-visible">
           {isRecording ? (
@@ -177,7 +184,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 <textarea
                   ref={textareaRef}
                   value={message}
-                  placeholder="Напишите сообщение... (Shift+Enter для новой строки)"
+                  placeholder="Напишите сообщение..."
                   disabled={isLoading}
                   rows={1}
                   className={cn(
