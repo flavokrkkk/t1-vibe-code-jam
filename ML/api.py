@@ -165,10 +165,7 @@ async def start_interview_stream(request: StartInterviewRequest) -> StartIntervi
             answer_text = parsed.get("answerText", "")
             next_question_text = next_step.get("questionText", "")
             
-            if answer_text and next_question_text:
-                question_text = f"{answer_text} {next_question_text}"
-            else:
-                question_text = answer_text or next_question_text
+            question_text = answer_text or next_question_text
             
             next_step_data = None
             if next_step_type == "CODE_TASK":

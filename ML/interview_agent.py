@@ -203,7 +203,11 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 2. Поприветствуй кандидата
 3. Задай первый вопрос
 
-В `answerText` должно быть приветствие (например: "Здравствуйте! Меня зовут [имя], я буду проводить интервью на позицию {job_title}. Давайте начнем."), а в `nextStep.questionText` — первый вопрос.
+**КРИТИЧЕСКИ ВАЖНО:** В `answerText` должно быть **приветствие И первый вопрос вместе** (например: "Здравствуйте! Меня зовут [имя], я буду проводить интервью на позицию {job_title}. Давайте начнем. Расскажите о вашем опыте работы с Python?").
+
+В `nextStep.questionText` можно указать только вопрос (без приветствия), но лучше оставить его пустым или повторить только вопрос для следующего шага.
+
+**НЕ ДУБЛИРУЙ** вопрос — если он уже есть в `answerText`, не повторяй его в `nextStep.questionText`.
 
 Начинай интервью с приветствия и первого вопроса (используй `new_step` с `nextStep.type = "{InterviewStepType["DIALOG"]}"`)."""
 
@@ -421,9 +425,7 @@ class InterviewAgent:
             answer_text = parsed.get("answerText", "")
             next_question_text = next_step.get("questionText", "")
             
-            if self.questions_asked == 0 and answer_text and next_question_text:
-                question_text = f"{answer_text} {next_question_text}"
-            elif self.questions_asked == 0:
+            if self.questions_asked == 0:
                 question_text = answer_text or next_question_text
             else:
                 question_text = next_question_text or answer_text
@@ -522,9 +524,7 @@ class InterviewAgent:
             answer_text = parsed.get("answerText", "")
             next_question_text = next_step.get("questionText", "")
             
-            if self.questions_asked == 0 and answer_text and next_question_text:
-                question_text = f"{answer_text} {next_question_text}"
-            elif self.questions_asked == 0:
+            if self.questions_asked == 0:
                 question_text = answer_text or next_question_text
             else:
                 question_text = next_question_text or answer_text
