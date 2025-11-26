@@ -456,7 +456,8 @@ class InterviewService(BaseDbModelService[Interview]):
             )
 
         logger.debug(
-            f"Обработка аудио файла для интервью {interview_id}. Размер: {len(audio_file)} байт, тип: {content_type}"
+            f"Обработка аудио файла для интервью {interview_id}. "
+            f"Размер: {len(audio_bytes)} байт, тип: {content_type}"
         )
 
         transcribed_text = await self._transcribe_audio(audio_bytes)
