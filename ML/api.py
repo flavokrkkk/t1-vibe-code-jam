@@ -224,144 +224,108 @@ async def start_interview_stream(request: StartInterviewRequest) -> StartIntervi
         )
 
 
-@app.post("/message/stream", response_model=InterviewStepResponse, status_code=status.HTTP_200_OK)
-async def process_message_stream(request: MessageRequest) -> InterviewStepResponse:
-    """Обработка ответа пользователя с использованием стриминга внутри."""
+@app.post("/message/stream")
+async def process_message_stream(request: MessageRequest):
+    """Реальный SSE стриминг - отправка чанков текста по мере получения от LLM."""
     if request.session_id not in agents:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Сессия интервью не найдена"
         )
     
-    try:
-        agent = agents[request.session_id]
-        
-        chunks = []
-        for chunk in agent.process_answer_stream(request.user_answer):
-            chunks.append(chunk)
-        
-        if not chunks:
-            raise RuntimeError("Пустой ответ от модели")
-        
-        full_response = "".join(chunks)
-        
-        if full_response.strip().startswith("{"):
-            try:
-                step_data = json.loads(full_response)
-                return InterviewStepResponse(**step_data)
-            except json.JSONDecodeError:
-                pass
-        
-        code_submission = agent._parse_code_submission(request.user_answer)
-        parsed = agent._parse_ai_response(full_response)
-        response_type = parsed.get("type", "dialog_response")
-        
-        if code_submission and response_type == "new_step":
-            next_step = parsed.get("nextStep", {})
-            next_step_type = next_step.get("type", "DIALOG")
+    async def generate_sse():
+        try:
+            agent = agents[request.session_id]
+            full_raw_text = ""
+            displayed_text = ""
+            in_json_block = False
+            json_buffer = ""
             
-            next_step_data = None
-            if next_step_type == "CODE_TASK":
-                code_task = next_step.get("codeTask", {})
-                next_step_data = {
-                    "type": "CODE_TASK",
-                    "code_task": {
-                        "topic": code_task.get("topic", "Python"),
-                        "difficulty": code_task.get("difficulty", "medium"),
-                        "language": code_task.get("language", "python")
-                    }
-                }
-            else:
-                question_text = next_step.get("questionText", parsed.get("answerText", ""))
-                next_step_data = {
-                    "type": "DIALOG",
-                    "question_text": question_text
-                }
+            # Собираем весь RAW ответ от LLM
+            for chunk in agent.process_answer_stream(request.user_answer):
+                full_raw_text += chunk
             
-            step = {
-                "type": "DIALOG",
-                "question_text": parsed.get("answerText", ""),
-                "status": "IN_PROGRESS",
-                "score": parsed.get("score"),
-                "ai_feedback": parsed.get("answerText", ""),
-                "user_answer": request.user_answer,
-                "feedback": parsed.get("feedback", ""),
-                "next_step": next_step_data
-            }
-            return InterviewStepResponse(**step)
-        
-        if response_type == "final_feedback":
-            step = {
-                "type": "DIALOG",
-                "question_text": parsed.get("answerText", ""),
-                "status": "COMPLETED",
-                "score": parsed.get("totalScore"),
-                "ai_feedback": parsed.get("overallFeedback", ""),
-                "user_answer": request.user_answer,
-                "feedback": parsed.get("feedback", ""),
-                "next_step": None
-            }
-        elif response_type == "new_step":
-            next_step = parsed.get("nextStep", {})
-            next_step_type = next_step.get("type", "DIALOG")
+            if not full_raw_text:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Пустой ответ от модели'})}\n\n"
+                return
             
-            next_step_data = None
-            if next_step_type == "CODE_TASK":
-                code_task = next_step.get("codeTask", {})
-                next_step_data = {
-                    "type": "CODE_TASK",
-                    "code_task": {
-                        "topic": code_task.get("topic", "Python"),
-                        "difficulty": code_task.get("difficulty", "medium"),
-                        "language": code_task.get("language", "python")
-                    }
-                }
-                question_text = parsed.get("answerText", "")
-            else:
-                question_text = next_step.get("questionText", parsed.get("answerText", ""))
-                next_step_data = {
-                    "type": "DIALOG",
-                    "question_text": question_text
-                }
+            # Парсим полный ответ для получения метаданных
+            parsed = agent._parse_ai_response(full_raw_text)
+            response_type = parsed.get("type", "dialog_response")
             
-            step = {
-                "type": "DIALOG" if next_step_type == "DIALOG" else "CODE_TASK",
-                "question_text": question_text,
-                "status": "COMPLETED" if agent.interview_ended else "IN_PROGRESS",
-                "score": parsed.get("score"),
-                "ai_feedback": parsed.get("answerText", ""),
-                "user_answer": request.user_answer,
-                "feedback": parsed.get("feedback", ""),
-                "next_step": next_step_data
-            }
-        else:
+            # ВСЕГДА используем answerText из JSON (это правильный текст ответа)
             answer_text = parsed.get("answerText", "")
-            step = {
-                "type": "DIALOG",
-                "question_text": answer_text,
-                "status": "COMPLETED" if agent.interview_ended else "IN_PROGRESS",
-                "score": None,
-                "ai_feedback": answer_text,
-                "user_answer": request.user_answer,
-                "feedback": None,
-                "next_step": {
-                    "type": "DIALOG",
-                    "question_text": answer_text
-                }
+            
+            if answer_text:
+                # Стримим answerText посимвольно для эффекта печатания
+                for char in answer_text:
+                    yield f"data: {json.dumps({'type': 'text_chunk', 'content': char}, ensure_ascii=False)}\n\n"
+                displayed_text = answer_text
+            else:
+                displayed_text = ""
+            
+            # Формируем внутренние метаданные (НЕ отправляем их как событие!)
+            metadata = {
+                "response_type": response_type,
+                "score": parsed.get("score"),
+                "feedback": parsed.get("feedback"),
+                "answer_text": displayed_text or parsed.get("answerText", ""),
+                "status": "COMPLETED" if (response_type == "final_feedback" or agent.interview_ended) else "IN_PROGRESS"
             }
-        
-        if step.get("status") == "COMPLETED" and agent.is_interview_complete():
-            final_feedback = agent.generate_feedback()
-            step["ai_feedback"] = final_feedback
-            step["feedback"] = final_feedback
-        
-        return InterviewStepResponse(**step)
-    except Exception as e:
-        logger.error(f"Ошибка при обработке сообщения: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при обработке сообщения: {str(e)}"
-        )
+            
+            # Если интервью завершено
+            if agent.is_interview_complete():
+                final_feedback = agent.generate_feedback()
+                metadata["final_feedback"] = final_feedback
+                metadata["status"] = "COMPLETED"
+            
+            # Определяем next_step
+            if response_type == "new_step":
+                next_step = parsed.get("nextStep", {})
+                next_step_type = next_step.get("type", "DIALOG")
+                
+                if next_step_type == "CODE_TASK":
+                    code_task = next_step.get("codeTask", {})
+                    metadata["next_step"] = {
+                        "type": "CODE_TASK",
+                        "code_task": {
+                            "topic": code_task.get("topic", "Python"),
+                            "difficulty": code_task.get("difficulty", "medium"),
+                            "language": code_task.get("language", "python")
+                        }
+                    }
+                else:
+                    # Если questionText пустой, используем answerText
+                    question_text = next_step.get("questionText") or parsed.get("answerText", "")
+                    metadata["next_step"] = {
+                        "type": "DIALOG",
+                        "question_text": question_text
+                    }
+            elif response_type == "final_feedback":
+                metadata["next_step"] = None
+                metadata["status"] = "COMPLETED"
+                metadata["total_score"] = parsed.get("totalScore")
+                metadata["overall_feedback"] = parsed.get("overallFeedback", "")
+            
+            # НЕ отправляем metadata как событие - бекенд его получит внутренне
+            # Только сохраняем для возврата
+            
+            # Возвращаем метаданные в специальном формате (для внутреннего использования)
+            yield f"data: {json.dumps({'type': '_metadata', 'data': metadata}, ensure_ascii=False)}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Ошибка при стриминге: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @app.delete("/session/{session_id}", status_code=status.HTTP_200_OK)

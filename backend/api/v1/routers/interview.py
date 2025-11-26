@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies import get_current_user_dependency, get_interview_service
@@ -69,6 +71,50 @@ async def handle_chat_message(
     interview_service: Annotated[InterviewService, Depends(get_interview_service)],
 ) -> InterviewSchema:
     return await interview_service.handle_chat_message(interview_id, MessageSender.USER, data.text)
+
+
+@router.post(
+    "/{interview_id}/message/stream",
+    responses={**error_response(BadRequestException), **error_response(NotFoundException)}
+)
+async def handle_chat_message_stream(
+    interview_id: UUID,
+    data: ChatMessageSchema,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+):
+    """SSE стриминг ответов AI - текст появляется по мере генерации"""
+    async def generate_sse():
+        try:
+            # Отправляем начальное событие для установки соединения
+            yield f": ping\n\n"
+            
+            # Используем новый метод с SSE стримингом
+            async for event in interview_service.handle_chat_message_stream(
+                interview_id, 
+                MessageSender.USER, 
+                data.text
+            ):
+                # Добавляем явный flush через двойной перенос строки
+                event_data = json.dumps(event, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+                
+        except BadRequestException as e:
+            logger.error(f"Ошибка валидации при стриминге: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"Ошибка при стриминге сообщения: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Внутренняя ошибка сервера'}, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
 
 
 @router.post(

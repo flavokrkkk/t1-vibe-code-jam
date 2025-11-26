@@ -88,6 +88,89 @@ class MLClient:
             logger.error(f"Таймаут при вызове ML API: {e}")
             raise BadRequestException("ML сервис не отвечает. Попробуйте позже.") from e
 
+    async def process_message_stream(
+        self,
+        session_id: str,
+        user_answer: str,
+    ):
+        """
+        Обработка ответа пользователя с SSE стримингом через /message/stream.
+        Возвращает async generator с чанками текста и метаданными.
+        
+        Yields:
+            dict: События вида:
+                - {"type": "text_chunk", "content": "..."}  # чанки текста
+                - {"type": "metadata", "score": 85, "next_step": {...}}  # метаданные
+                - {"type": "done"}  # завершение
+                - {"type": "error", "message": "..."}  # ошибка
+        """
+        url = f"{self.base_url}/message/stream"
+        payload = {
+            "session_id": session_id,
+            "user_answer": user_answer,
+        }
+
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120.0)) as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status == 404:
+                        error_text = await response.text()
+                        logger.error(f"Сессия {session_id} не найдена в ML сервисе: {error_text}")
+                        raise BadRequestException("Сессия интервью не найдена.")
+                    
+                    if response.status >= 400:
+                        error_text = await response.text()
+                        logger.error(f"ML API вернул ошибку: {response.status} - {error_text}")
+                        raise BadRequestException(
+                            f"Ошибка ML сервиса при обработке сообщения: {response.status}"
+                        )
+                    
+                    # Читаем SSE поток
+                    import json
+                    buffer = ""
+                    
+                    async for chunk in response.content.iter_any():
+                        if not chunk:
+                            continue
+                            
+                        # Декодируем чанк и добавляем в буфер
+                        buffer += chunk.decode('utf-8')
+                        
+                        # Разбиваем по строкам
+                        while '\n' in buffer:
+                            line, buffer = buffer.split('\n', 1)
+                            line = line.strip()
+                            
+                            if not line or not line.startswith('data: '):
+                                continue
+                            
+                            # Парсим JSON из SSE
+                            data_str = line[6:]  # Убираем "data: "
+                            
+                            # Пропускаем пустые data или комментарии
+                            if not data_str or data_str.startswith(':'):
+                                continue
+                                
+                            try:
+                                event_data = json.loads(data_str)
+                                logger.debug(f"SSE event received: type={event_data.get('type')}, content_len={len(str(event_data.get('content', '')))}")
+                                yield event_data
+                                
+                                # Прерываем если получили done или error
+                                if event_data.get("type") in ("done", "error"):
+                                    logger.info(f"SSE stream completed with type: {event_data.get('type')}")
+                                    return
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"Не удалось распарсить SSE событие: {data_str[:100]}... Error: {e}")
+                                continue
+                            
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка соединения с ML API: {e}")
+            raise BadRequestException("Не удалось подключиться к ML сервису.") from e
+        except asyncio.TimeoutError as e:
+            logger.error(f"Таймаут при вызове ML API: {e}")
+            raise BadRequestException("ML сервис не отвечает. Попробуйте позже.") from e
+
     async def generate_code_task(
         self,
         topic: str,

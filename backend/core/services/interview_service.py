@@ -116,6 +116,14 @@ class InterviewService(BaseDbModelService[Interview]):
         if not message_text and step_type == "DIALOG" and interview.current_step_index == 0:
              message_text = "Здравствуйте! Готовы начать?"
         
+        # Если нет текста для не-первого шага - это ошибка
+        if not message_text and interview.current_step_index > 0:
+            logger.error(f"No message_text for step {interview.current_step_index}, step_data: {step_data}")
+            # Не создаем пустой шаг
+            interview.pending_next_step = None
+            await self.session.flush()
+            return
+        
         step = InterviewStep(
             interview_id=interview.id,
             type=InterviewStepType(step_type),
@@ -208,7 +216,9 @@ class InterviewService(BaseDbModelService[Interview]):
 
         self.session.add(step)
         
-        if message_text:
+        # Для DIALOG шагов сохраняем question_text как сообщение
+        # (это следующий вопрос от AI)
+        if message_text and step_type == "DIALOG":
             message = ChatMessage(
                 interview_id=interview.id,
                 sender=MessageSender.AI,
@@ -395,6 +405,118 @@ class InterviewService(BaseDbModelService[Interview]):
 
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
+
+    async def handle_chat_message_stream(
+        self,
+        interview_id: UUID,
+        sender: MessageSender,
+        text: str,
+    ):
+        """
+        SSE стриминг версия handle_chat_message.
+        Yields события по мере получения от ML модели.
+        """
+        interview = await self.find_interview_by_id(interview_id, None)
+
+        if interview.status in [
+            InterviewStatus.COMPLETED,
+            InterviewStatus.CANCELLED,
+        ]:
+            raise BadRequestException(
+                "Интервью уже завершено или отменено. Новые сообщения не принимаются."
+            )
+
+        # Сохраняем сообщение пользователя
+        user_message = ChatMessage(
+            interview_id=interview_id,
+            sender=sender,
+            text=text,
+        )
+        self.session.add(user_message)
+        await self.session.flush()
+
+        session_id = str(interview_id)
+        
+        # Собираем данные из стрима
+        full_text = ""
+        metadata = {}
+        
+        # Стримим события от ML
+        async for event in self.ml_client.process_message_stream(
+            session_id=session_id,
+            user_answer=text,
+        ):
+            event_type = event.get("type")
+            
+            if event_type == "text_chunk":
+                chunk_content = event.get("content", "")
+                full_text += chunk_content
+                logger.debug(f"Streaming text chunk: {chunk_content[:50]}...")
+                # Передаем чанк дальше на фронт
+                yield event
+            
+            elif event_type == "_metadata":
+                # Внутренние метаданные - НЕ передаем на фронт, только сохраняем
+                metadata = event.get("data", {})
+                logger.info(f"Received metadata: score={metadata.get('score')}, next_step={metadata.get('next_step', {}).get('type')}")
+            
+            elif event_type == "done":
+                # Стрим завершен
+                yield event
+                break
+            
+            elif event_type == "error":
+                logger.error(f"Ошибка от ML стрима: {event.get('message')}")
+                yield event
+                raise BadRequestException(f"Ошибка ML: {event.get('message')}")
+        
+        # После завершения стрима - обновляем БД
+        # Используем answer_text из metadata (это answerText из JSON ответа ML)
+        answer_text = metadata.get("answer_text", full_text)
+        
+        ml_response = {
+            "feedback": metadata.get("feedback"),
+            "score": metadata.get("score"),
+            "next_step": metadata.get("next_step"),
+            "ai_feedback": answer_text,
+            "status": metadata.get("status", "IN_PROGRESS"),
+            "total_score": metadata.get("total_score"),
+            "overall_feedback": metadata.get("overall_feedback")
+        }
+        
+        logger.info(f"ML stream completed. Full text len: {len(full_text)}, answer_text: {answer_text[:100]}")
+        
+        # Обновляем текущий шаг
+        await self._update_current_step(interview, ml_response, text)
+        
+        # НЕ сохраняем answer_text как отдельное сообщение!
+        # Оно будет сохранено как question_text следующего шага в _create_step_from_pending_next_step
+        
+        response_status = ml_response.get("status", "IN_PROGRESS")
+        
+        if response_status != "COMPLETED":
+            # Сохраняем next_step в pending
+            next_step_data = ml_response.get("next_step")
+            if next_step_data:
+                interview.pending_next_step = next_step_data
+                
+                # Создаем следующий шаг
+                await self._create_step_from_pending_next_step(interview)
+                interview.current_step_index += 1
+        else:
+            interview.status = InterviewStatus.COMPLETED
+            interview.total_score = ml_response.get("total_score") or ml_response.get("score")
+            interview.overall_feedback = ml_response.get("overall_feedback") or full_text
+        
+        await self.session.commit()
+        
+        # Отправляем финальный Interview объект (без type, просто модель)
+        refreshed_interview = await self.find_interview_by_id(interview_id, None)
+        from core.dto.interview import InterviewSchema
+        interview_data = InterviewSchema.model_validate(refreshed_interview, from_attributes=True)
+        
+        # Отправляем чистый Interview как в обычном /message
+        yield interview_data.model_dump(mode='json')
 
     async def _update_current_step(self, interview: Interview, ml_response: dict[str, Any], user_answer: str):
         current_step = next(
