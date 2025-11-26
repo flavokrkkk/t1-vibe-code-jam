@@ -15,4 +15,3 @@ EXPOSE 8080
 
 # Команда запуска (используем run_api.py или uvicorn напрямую)
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"]
-

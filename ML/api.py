@@ -27,6 +27,7 @@ class StartInterviewRequest(BaseModel):
     required_skills: list[str] = Field(..., min_length=1, description="Список требуемых навыков")
     amount_of_tasks: int = Field(..., ge=1, le=30, description="Количество вопросов в интервью")
     session_id: str | None = Field(None, description="ID сессии (опционально, для синхронизации с бэкендом)")
+    preferences: str | None = Field(None, description="Дополнительные предпочтения (например: 'побольше задач на код')")
 
 
 class NextStepDialog(BaseModel):
@@ -52,6 +53,7 @@ class InterviewStepResponse(BaseModel):
     user_answer: str | None = Field(None, description="Ответ пользователя")
     feedback: str | None = Field(None, description="Краткая обратная связь")
     next_step: dict[str, Any] | None = Field(None, description="Следующий шаг интервью")
+    code_task: dict[str, Any] | None = Field(None, description="Полная кодовая задача (если type=CODE_TASK)")
 
 
 class MessageRequest(BaseModel):
@@ -87,6 +89,7 @@ async def start_interview(request: StartInterviewRequest) -> StartInterviewRespo
             job_title=request.job_title,
             required_skills=request.required_skills,
             amount_of_tasks=request.amount_of_tasks,
+            preferences=request.preferences,
         )
         
         agents[session_id] = agent
@@ -151,6 +154,7 @@ async def start_interview_stream(request: StartInterviewRequest) -> StartIntervi
             job_title=request.job_title,
             required_skills=request.required_skills,
             amount_of_tasks=request.amount_of_tasks,
+            preferences=request.preferences,
         ):
             full_response += chunk
         
@@ -260,34 +264,62 @@ async def process_message_stream(request: MessageRequest) -> InterviewStepRespon
             next_step = parsed.get("nextStep", {})
             next_step_type = next_step.get("type", "DIALOG")
             
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            full_code_task = None
+            
             next_step_data = None
             if next_step_type == "CODE_TASK":
                 code_task = next_step.get("codeTask", {})
+                topic = code_task.get("topic", "Python")
+                difficulty = code_task.get("difficulty", "medium")
+                language = code_task.get("language", "python")
+                
+                try:
+                    full_code_task = agent.generate_code_task(topic, difficulty, language)
+                    question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                except Exception as e:
+                    logger.error(f"Ошибка генерации задачи: {e}")
+                    question_text = answer_text or "Переходим к кодовой задаче."
+                    full_code_task = {
+                        "description": "Ошибка генерации задачи",
+                        "initial_code": "",
+                        "test_cases": [],
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
+                    }
+                
                 next_step_data = {
                     "type": "CODE_TASK",
                     "code_task": {
-                        "topic": code_task.get("topic", "Python"),
-                        "difficulty": code_task.get("difficulty", "medium"),
-                        "language": code_task.get("language", "python")
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
                     }
                 }
             else:
-                question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                question_text = next_question_text or answer_text
+                if not question_text:
+                    question_text = "Следующий вопрос."
                 next_step_data = {
                     "type": "DIALOG",
                     "question_text": question_text
                 }
             
             step = {
-                "type": "DIALOG",
-                "question_text": parsed.get("answerText", ""),
+                "type": "DIALOG" if next_step_type == "DIALOG" else "CODE_TASK",
+                "question_text": question_text,
                 "status": "IN_PROGRESS",
                 "score": parsed.get("score"),
-                "ai_feedback": parsed.get("answerText", ""),
+                "ai_feedback": answer_text,
                 "user_answer": request.user_answer,
                 "feedback": parsed.get("feedback", ""),
                 "next_step": next_step_data
             }
+            
+            if full_code_task:
+                step["code_task"] = full_code_task
             return InterviewStepResponse(**step)
         
         if response_type == "final_feedback":
@@ -305,20 +337,44 @@ async def process_message_stream(request: MessageRequest) -> InterviewStepRespon
             next_step = parsed.get("nextStep", {})
             next_step_type = next_step.get("type", "DIALOG")
             
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            full_code_task = None
+            
             next_step_data = None
             if next_step_type == "CODE_TASK":
                 code_task = next_step.get("codeTask", {})
+                topic = code_task.get("topic", "Python")
+                difficulty = code_task.get("difficulty", "medium")
+                language = code_task.get("language", "python")
+                
+                try:
+                    full_code_task = agent.generate_code_task(topic, difficulty, language)
+                    question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                except Exception as e:
+                    logger.error(f"Ошибка генерации задачи: {e}")
+                    question_text = answer_text or "Переходим к кодовой задаче."
+                    full_code_task = {
+                        "description": "Ошибка генерации задачи",
+                        "initial_code": "",
+                        "test_cases": [],
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
+                    }
+                
                 next_step_data = {
                     "type": "CODE_TASK",
                     "code_task": {
-                        "topic": code_task.get("topic", "Python"),
-                        "difficulty": code_task.get("difficulty", "medium"),
-                        "language": code_task.get("language", "python")
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
                     }
                 }
-                question_text = parsed.get("answerText", "")
             else:
-                question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                question_text = next_question_text or answer_text
+                if not question_text:
+                    question_text = "Следующий вопрос."
                 next_step_data = {
                     "type": "DIALOG",
                     "question_text": question_text
@@ -329,11 +385,14 @@ async def process_message_stream(request: MessageRequest) -> InterviewStepRespon
                 "question_text": question_text,
                 "status": "COMPLETED" if agent.interview_ended else "IN_PROGRESS",
                 "score": parsed.get("score"),
-                "ai_feedback": parsed.get("answerText", ""),
+                "ai_feedback": answer_text,
                 "user_answer": request.user_answer,
                 "feedback": parsed.get("feedback", ""),
                 "next_step": next_step_data
             }
+            
+            if full_code_task:
+                step["code_task"] = full_code_task
         else:
             answer_text = parsed.get("answerText", "")
             step = {
