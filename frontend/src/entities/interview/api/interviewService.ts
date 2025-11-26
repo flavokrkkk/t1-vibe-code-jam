@@ -63,6 +63,31 @@ class InterviewService {
     }
   }
 
+  public async runCodeTests({
+    sourceCode,
+    language,
+    testCases,
+  }: {
+    sourceCode: string;
+    language: string;
+    testCases: Array<Record<string, any>>;
+  }): Promise<string> {
+    try {
+      return await authApiLongTimeout
+        .post("code/run", {
+          json: {
+            source_code: sourceCode,
+            language: language,
+            test_cases: testCases,
+          },
+        })
+        .json<string>();
+    } catch (error) {
+      console.error("Error running code tests:", error);
+      throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
+    }
+  }
+
   public async submitCode({
     interviewId,
     stepId,
@@ -166,6 +191,7 @@ export const {
   createInterview,
   getAllInterviews,
   getInterviewById,
+  runCodeTests,
   submitCode,
   sendChatMessage,
   sendAudioMessage,

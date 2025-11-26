@@ -14,6 +14,9 @@ interface TaskCodeEditorProps {
   currentTestResults: CodeTestResult[];
   onCodeChange: (newCode: string | undefined) => void;
   onRunTests: () => void;
+  sourceCode: string;
+  interviewId: string;
+  stepId: string;
 }
 
 export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
@@ -24,6 +27,9 @@ export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
   currentTestResults,
   onCodeChange,
   onRunTests,
+  sourceCode,
+  interviewId,
+  stepId,
 }) => {
   const {
     isCodeEditorMaximized,
@@ -90,6 +96,10 @@ export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
                 testResults={mappedTestResults}
                 setActiveTestId={setActiveTestId}
                 onRunTests={onRunTests}
+                sourceCode={sourceCode}
+                language={language}
+                interviewId={interviewId}
+                stepId={stepId}
               />
             </div>
           )}

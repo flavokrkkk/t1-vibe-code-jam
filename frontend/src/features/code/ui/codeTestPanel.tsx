@@ -4,6 +4,9 @@ import {
   CodeTestResultStatus,
   TestCase,
 } from "@/entities/interview/types/types";
+import { useRunCodeTests } from "@/entities/interview/hooks/useRunCodeTests";
+import { useSubmitCodeToStep } from "@/entities/interview/hooks/useSubmitCodeToStep";
+import { useState, useEffect } from "react";
 
 interface TestPanelProps {
   isAILoading: boolean;
@@ -12,6 +15,10 @@ interface TestPanelProps {
   setActiveTestId: (id: string) => void;
   testResults: { [key: string]: CodeTestResultStatus };
   onRunTests: () => void;
+  sourceCode: string;
+  language: string;
+  interviewId: string;
+  stepId: string;
 }
 
 export const TestPanel: React.FC<TestPanelProps> = ({
@@ -21,8 +28,70 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   testResults,
   onRunTests,
   setActiveTestId,
+  sourceCode,
+  language,
+  interviewId,
+  stepId,
 }) => {
   const activeCase = testCases.find((tc) => tc.id === activeTestId);
+
+  const { mutate: runCodeTests, isPending: isRunningTests } = useRunCodeTests();
+  const { mutate: submitCodeToStep, isPending: isSubmittingCode } =
+    useSubmitCodeToStep();
+
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const isLoading = isAILoading || isRunningTests || isSubmittingCode;
+
+  useEffect(() => {
+    setTestResult(null);
+  }, [sourceCode, activeTestId]);
+
+  const handleRunTests = () => {
+    if (!sourceCode || testCases.length === 0) return;
+
+    const testCasesForApi = testCases.map((tc) => ({
+      input: tc.input,
+      expected_output: tc.expected_output,
+    }));
+
+    runCodeTests(
+      {
+        sourceCode,
+        language,
+        testCases: testCasesForApi,
+      },
+      {
+        onSuccess: (result) => {
+          setTestResult(result);
+        },
+        onError: (error) => {
+          console.error("Error running tests:", error);
+          setTestResult(`Ошибка: ${error.message}`);
+        },
+      }
+    );
+  };
+
+  const handleSubmitCode = () => {
+    if (!sourceCode) return;
+
+    submitCodeToStep(
+      {
+        interviewId,
+        stepId,
+        userCode: sourceCode,
+      },
+      {
+        onSuccess: () => {
+          onRunTests();
+        },
+        onError: (error) => {
+          console.error("Error submitting code:", error);
+        },
+      }
+    );
+  };
 
   return (
     <div className="flex flex-col bg-white relative text-zinc-800 rounded-lg shadow-md border border-zinc-200 h-full">
@@ -37,7 +106,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                 : "text-zinc-500 hover:text-zinc-800 border-b-2 border-transparent hover:border-zinc-300"
             )}
             onClick={() => setActiveTestId(tc.id)}
-            disabled={isAILoading}
+            disabled={isLoading}
           >
             {testResults[tc.id] && getResultIcon(testResults[tc.id])}
             Case {index + 1}
@@ -62,7 +131,13 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   Test Result:
                 </h3>
                 <div className="bg-zinc-100 p-3 rounded-lg min-h-[70px] flex items-center border border-zinc-200">
-                  {getResultDisplay(testResults[activeTestId])}
+                  {testResult ? (
+                    <pre className="text-sm whitespace-pre-wrap">
+                      {testResult}
+                    </pre>
+                  ) : (
+                    getResultDisplay(testResults[activeTestId])
+                  )}
                 </div>
               </div>
 
@@ -94,26 +169,27 @@ export const TestPanel: React.FC<TestPanelProps> = ({
 
         <div className="flex space-x-2 justify-end text-right border-t absolute border-zinc-200 bg-zinc-50 w-full bottom-0 right-0 p-2">
           <button
-            onClick={onRunTests}
-            disabled={isAILoading || !activeCase}
+            onClick={handleRunTests}
+            disabled={isLoading || !sourceCode || testCases.length === 0}
             className={cn(
               "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
               "bg-white border text-blue-700 border-blue-700",
-              (isAILoading || !activeCase) && "cursor-not-allowed opacity-35"
+              (isLoading || !activeCase || !sourceCode) &&
+                "cursor-not-allowed opacity-35"
             )}
           >
-            {isAILoading ? "Running Tests..." : "Запустить тесты"}
+            {isRunningTests ? "Running Tests..." : "Запустить тесты"}
           </button>
           <button
-            onClick={onRunTests}
-            disabled={isAILoading}
+            onClick={handleSubmitCode}
+            disabled={isLoading || !sourceCode}
             className={cn(
               "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
               "bg-blue-500 hover:bg-blue-700",
-              isAILoading && "opacity-50 cursor-not-allowed bg-blue-700"
+              isLoading && "opacity-50 cursor-not-allowed bg-blue-700"
             )}
           >
-            {isAILoading ? "Отправка..." : "Отправить код"}
+            {isSubmittingCode ? "Отправка..." : "Отправить код"}
           </button>
         </div>
       </div>
