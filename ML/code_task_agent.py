@@ -67,37 +67,94 @@ class CodeTaskAgent:
         language: str,
     ) -> dict[str, Any]:
         """Генерация полной задачи на код."""
-        prompt = f"""Сгенерируй задачу на программирование в формате LeetCode.
-
-Тема: {topic}
-Сложность: {difficulty}
-Язык: {language}
-
-Формат кода (обязательно):
-class Solution(object):
+        language_lower = language.lower()
+        
+        # Определяем формат кода в зависимости от языка
+        if language_lower in ['sql', 'mysql', 'postgresql']:
+            code_format = """-- SQL запрос
+SELECT ... FROM ... WHERE ..."""
+            code_example = """SELECT column1, column2 
+FROM table_name 
+WHERE condition"""
+            format_instructions = "- initial_code должен быть SQL запросом (SELECT, INSERT, UPDATE, DELETE и т.д.)\n- Используй правильный синтаксис для указанного SQL диалекта"
+        elif language_lower in ['javascript', 'js', 'typescript', 'ts']:
+            code_format = """class Solution {{
+    methodName(param1, param2) {{
+        // реализация
+    }}
+}}"""
+            code_example = """class Solution {{
+    twoSum(nums, target) {{
+        // реализация
+    }}
+}}"""
+            format_instructions = "- initial_code должен быть классом Solution с методами\n- Используй синтаксис JavaScript/TypeScript"
+        elif language_lower in ['java']:
+            code_format = """class Solution {{
+    public ReturnType methodName(ParamType param1, ParamType param2) {{
+        // реализация
+    }}
+}}"""
+            code_example = """class Solution {{
+    public int[] twoSum(int[] nums, int target) {{
+        // реализация
+    }}
+}}"""
+            format_instructions = "- initial_code должен быть классом Solution с публичными методами\n- Используй типы Java (int[], String, List<Integer> и т.д.)"
+        elif language_lower in ['python', 'py']:
+            code_format = """class Solution(object):
     def methodName(self, param1, param2):
         \"\"\"
         :type param1: List[int]
         :type param2: int
         :rtype: List[int]
         \"\"\"
-        pass
+        pass"""
+            code_example = """class Solution(object):
+    def twoSum(self, nums, target):
+        \"\"\"
+        :type nums: List[int]
+        :type target: int
+        :rtype: List[int]
+        \"\"\"
+        pass"""
+            format_instructions = "- initial_code ОБЯЗАТЕЛЬНО в формате LeetCode: class Solution(object)\n- Метод ДОЛЖЕН иметь docstring с :type для каждого параметра и :rtype для возврата\n- Используй List[int], str, int, bool в type hints"
+        else:
+            # Для других языков используем общий формат
+            code_format = f"""// Код на {language}
+function methodName(param1, param2) {{
+    // реализация
+}}"""
+            code_example = code_format
+            format_instructions = f"- initial_code должен быть валидным кодом на {language}\n- Используй правильный синтаксис для {language}"
+        
+        prompt = f"""Сгенерируй задачу на программирование в формате LeetCode.
+
+Тема: {topic}
+Сложность: {difficulty}
+Язык: {language}
+
+Формат кода для {language}:
+{code_format}
+
+Пример:
+{code_example}
 
 Верни JSON:
 {{
   "description": "описание задачи (2-3 предложения)",
-  "initial_code": "class Solution(object):\\n    def twoSum(self, nums, target):\\n        \\\"\\\"\\\"\\n        :type nums: List[int]\\n        :type target: int\\n        :rtype: List[int]\\n        \\\"\\\"\\\"\\n        pass",
+  "initial_code": "код в формате для {language}",
   "test_cases": [
-    {{"input": "nums = [2,7,11,15], target = 9", "output": "[0,1]"}},
-    {{"input": "nums = [3,2,4], target = 6", "output": "[1,2]"}}
+    {{"input": "параметры теста", "output": "ожидаемый результат"}},
+    {{"input": "параметры теста", "output": "ожидаемый результат"}}
   ]
 }}
 
 КРИТИЧЕСКИ ВАЖНО:
-- initial_code ОБЯЗАТЕЛЬНО в формате LeetCode: class Solution(object)
-- Метод ДОЛЖЕН иметь docstring с :type для каждого параметра и :rtype для возврата
-- Для Python используй List[int], str, int, bool в type hints
-- test_cases: массив из 2-3 тестов с input и output как строки"""
+{format_instructions}
+- test_cases: массив из 2-3 тестов с input и output как строки
+- Код ДОЛЖЕН соответствовать языку {language}
+- Если язык SQL - генерируй SQL запрос, а не Python код"""
         
         messages = [
             HumanMessage(content=prompt)
