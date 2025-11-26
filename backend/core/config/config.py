@@ -33,8 +33,11 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     ASSEMBLYAI_API_KEY: str | None = None
+    SCIBOX_API_KEY: str | None = None
+    SCIBOX_BASE_URL: str | None = None
 
     ML_API_URL: str = "http://localhost:8080"
+    JUDGE0_API_URL: str = "http://judge0-server:2358"
 
     model_config = SettingsConfigDict(
         env_file="../.env",
