@@ -15,6 +15,7 @@ def start_interview():
     skills_input = input("Навыки (через запятую): ").strip() or "Python, FastAPI, SQL"
     required_skills = [s.strip() for s in skills_input.split(",")]
     amount_of_tasks = input("Количество вопросов (по умолчанию 5): ").strip() or "5"
+    preferences = input("Дополнительные предпочтения (например: 'побольше задач на код', Enter для пропуска): ").strip() or None
     
     try:
         amount_of_tasks = int(amount_of_tasks)
@@ -23,16 +24,23 @@ def start_interview():
     
     print(f"\nНачинаем интервью на позицию: {job_title}")
     print(f"Навыки: {', '.join(required_skills)}")
-    print(f"Количество вопросов: {amount_of_tasks}\n")
+    print(f"Количество вопросов: {amount_of_tasks}")
+    if preferences:
+        print(f"Дополнительные предпочтения: {preferences}")
+    print()
     print("-" * 60)
+    
+    payload = {
+        "job_title": job_title,
+        "required_skills": required_skills,
+        "amount_of_tasks": amount_of_tasks
+    }
+    if preferences:
+        payload["preferences"] = preferences
     
     response = requests.post(
         f"{API_URL}/start/stream",
-        json={
-            "job_title": job_title,
-            "required_skills": required_skills,
-            "amount_of_tasks": amount_of_tasks
-        }
+        json=payload
     )
     
     if response.status_code != 200:
@@ -44,7 +52,29 @@ def start_interview():
     session_id = data["session_id"]
     step = data["step"]
     
-    print(f"\n[Интервьюер]: {step['question_text']}\n")
+    print(f"\n[Интервьюер]: {step['question_text']}")
+    
+    if step.get('code_task'):
+        code_task = step['code_task']
+        print(f"\n{'='*60}")
+        print(f"[КОДОВАЯ ЗАДАЧА]")
+        print(f"{'='*60}")
+        print(f"Тема: {code_task.get('topic', 'N/A')}")
+        print(f"Сложность: {code_task.get('difficulty', 'N/A')}")
+        print(f"Язык: {code_task.get('language', 'N/A')}")
+        if code_task.get('description'):
+            print(f"\nОписание:")
+            print(f"{code_task['description']}")
+        if code_task.get('initial_code'):
+            print(f"\nНачальный код:")
+            print(f"{code_task['initial_code']}")
+        if code_task.get('test_cases'):
+            print(f"\nТестовых случаев: {len(code_task['test_cases'])}")
+            for i, test_case in enumerate(code_task['test_cases'], 1):
+                print(f"  Тест {i}: {test_case.get('input', 'N/A')} -> {test_case.get('expected_output', 'N/A')}")
+        print(f"{'='*60}")
+    
+    print()
     
     return session_id
 
@@ -81,8 +111,28 @@ def continue_dialog(session_id):
         
         print(f"\n[Интервьюер]: {step['question_text']}")
         
+        if step.get('code_task'):
+            code_task = step['code_task']
+            print(f"\n{'='*60}")
+            print(f"[КОДОВАЯ ЗАДАЧА]")
+            print(f"{'='*60}")
+            print(f"Тема: {code_task.get('topic', 'N/A')}")
+            print(f"Сложность: {code_task.get('difficulty', 'N/A')}")
+            print(f"Язык: {code_task.get('language', 'N/A')}")
+            if code_task.get('description'):
+                print(f"\nОписание:")
+                print(f"{code_task['description']}")
+            if code_task.get('initial_code'):
+                print(f"\nНачальный код:")
+                print(f"{code_task['initial_code']}")
+            if code_task.get('test_cases'):
+                print(f"\nТестовых случаев: {len(code_task['test_cases'])}")
+                for i, test_case in enumerate(code_task['test_cases'], 1):
+                    print(f"  Тест {i}: {test_case.get('input', 'N/A')} -> {test_case.get('expected_output', 'N/A')}")
+            print(f"{'='*60}")
+        
         if step.get('score') is not None:
-            print(f"[Оценка]: {step['score']}/100")
+            print(f"\n[Оценка]: {step['score']}/100")
         
         if step.get('feedback'):
             print(f"[Обратная связь]: {step['feedback']}")

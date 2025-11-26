@@ -13,7 +13,8 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from langchain_integration import get_scibox_llm
-from scibox_config import DEFAULT_CHAT_MODEL
+from scibox_config import DEFAULT_CHAT_MODEL, DEFAULT_CODER_MODEL
+from code_task_agent import CodeTaskAgent
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,10 @@ ResponseType = {
 }
 
 
-def get_system_prompt(job_title: str, required_skills: list[str], amount_of_tasks: int) -> str:
+def get_system_prompt(job_title: str, required_skills: list[str], amount_of_tasks: int, preferences: str | None = None) -> str:
     """Генерация системного промпта для интервью."""
     skills_text = ", ".join(required_skills) if required_skills else "не указаны"
+    preferences_text = f"\n\n### ДОПОЛНИТЕЛЬНЫЕ ПРЕДПОЧТЕНИЯ:\n{preferences}\n\nУчитывай эти предпочтения при планировании интервью." if preferences else ""
     
     return f"""Ты — строгий ассистент интервью. Твоя задача — **всегда возвращать валидный JSON** в **обёртке ```json ... ```**.
 
@@ -104,7 +106,7 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 - **feedback**: **2 предложения** — что хорошо, что можно улучшить, конкретные примеры (до 400 символов). Если длиннее — обрежь.
 
-- **answerText**: 1–2 предложения.
+- **answerText**: 1–2 предложения. **НЕ ДУБЛИРУЙ feedback** — это должен быть отдельный краткий комментарий, например "Хорошо, переходим дальше" или "Понятно, давайте проверим на практике".
 
 - **score**: 0–100.
 
@@ -182,7 +184,7 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 - Позиция: "{job_title}"
 
-- Требуемые навыки: {skills_text}
+- Требуемые навыки: {skills_text}{preferences_text}
 
 - Статус: **не завершай, пока не будет подтверждения**
 
@@ -191,6 +193,10 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 - **Если в названии позиции указано "developer"** (в любом регистре), то **ОБЯЗАТЕЛЬНО** должен быть **минимум один шаг с типом `{InterviewStepType["CODE_TASK"]}`** в ходе интервью.
 
 - Это правило имеет **высший приоритет** — даже если все остальные шаги диалоговые, **минимум один** должен быть кодовая задача.
+
+- **Используй CODE_TASK активно** — если кандидат показал базовые знания, дай ему кодовую задачу для проверки практических навыков. Особенно после 2-3 диалоговых вопросов.
+
+- **В answerText НЕ ДУБЛИРУЙ feedback** — answerText должен быть кратким комментарием (1-2 предложения), а feedback — детальным анализом. Они должны быть разными!
 
 ---
 
@@ -281,11 +287,13 @@ class InterviewAgent:
         
         self.llm = get_scibox_llm(model=model)
         self.model_name = model
+        self.code_task_agent = CodeTaskAgent(api_key=api_key)
         self.conversation_history: list[Any] = []
         self.interview_ended = False
         self.amount_of_tasks = 0
         self.job_title = ""
         self.required_skills: list[str] = []
+        self.preferences: str | None = None
         self.code_submit_count: dict[str, int] = {}
         self.questions_asked = 0
         self.negative_answers_count = 0
@@ -296,7 +304,8 @@ class InterviewAgent:
         system_prompt = get_system_prompt(
             self.job_title,
             self.required_skills,
-            self.amount_of_tasks
+            self.amount_of_tasks,
+            self.preferences
         )
         
         messages = [SystemMessage(content=system_prompt)]
@@ -392,11 +401,13 @@ class InterviewAgent:
         job_title: str,
         required_skills: list[str],
         amount_of_tasks: int,
+        preferences: str | None = None,
     ) -> dict[str, Any]:
         """Начало интервью - получение первого вопроса в формате STEP."""
         self.job_title = job_title
         self.required_skills = required_skills
         self.amount_of_tasks = amount_of_tasks
+        self.preferences = preferences
         self.interview_ended = False
         self.conversation_history = []
         self.code_submit_count = {}
@@ -407,7 +418,8 @@ class InterviewAgent:
             SystemMessage(content=get_system_prompt(
                 self.job_title,
                 self.required_skills,
-                self.amount_of_tasks
+                self.amount_of_tasks,
+                self.preferences
             )),
             HumanMessage(content="Начни интервью. Обязательно представься, поприветствуй кандидата и задай первый вопрос. В answerText должно быть приветствие и первый вопрос вместе.")
         ]
@@ -429,6 +441,9 @@ class InterviewAgent:
                 question_text = answer_text or next_question_text
             else:
                 question_text = next_question_text or answer_text
+            
+            if not question_text:
+                question_text = "Следующий вопрос." if next_step_type == InterviewStepType["DIALOG"] else "Переходим к кодовой задаче."
             
             next_step_data = None
             if next_step_type == InterviewStepType["CODE_TASK"]:
@@ -485,11 +500,13 @@ class InterviewAgent:
         job_title: str,
         required_skills: list[str],
         amount_of_tasks: int,
+        preferences: str | None = None,
     ):
         """Начало интервью со стримингом ответа."""
         self.job_title = job_title
         self.required_skills = required_skills
         self.amount_of_tasks = amount_of_tasks
+        self.preferences = preferences
         self.interview_ended = False
         self.conversation_history = []
         self.code_submit_count = {}
@@ -500,7 +517,8 @@ class InterviewAgent:
             SystemMessage(content=get_system_prompt(
                 self.job_title,
                 self.required_skills,
-                self.amount_of_tasks
+                self.amount_of_tasks,
+                self.preferences
             )),
             HumanMessage(content="Начни интервью. Обязательно представься, поприветствуй кандидата и задай первый вопрос. В answerText должно быть приветствие и первый вопрос вместе.")
         ]
@@ -528,6 +546,9 @@ class InterviewAgent:
                 question_text = answer_text or next_question_text
             else:
                 question_text = next_question_text or answer_text
+            
+            if not question_text:
+                question_text = "Следующий вопрос." if next_step_type == InterviewStepType["DIALOG"] else "Переходим к кодовой задаче."
             
             next_step_data = None
             if next_step_type == InterviewStepType["CODE_TASK"]:
@@ -632,34 +653,64 @@ class InterviewAgent:
                 next_step = parsed.get("nextStep", {})
                 next_step_type = next_step.get("type", InterviewStepType["DIALOG"])
                 
+                answer_text = parsed.get("answerText", "")
+                next_question_text = next_step.get("questionText", "")
+                full_code_task = None
+                
                 next_step_data = None
                 if next_step_type == InterviewStepType["CODE_TASK"]:
                     code_task = next_step.get("codeTask", {})
+                    topic = code_task.get("topic", "Python")
+                    difficulty = code_task.get("difficulty", "medium")
+                    language = code_task.get("language", "python")
+                    
+                    try:
+                        full_code_task = self.generate_code_task(topic, difficulty, language)
+                        question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                    except Exception as e:
+                        logger.error(f"Ошибка генерации задачи: {e}")
+                        question_text = answer_text or "Переходим к кодовой задаче."
+                        full_code_task = {
+                            "description": "Ошибка генерации задачи",
+                            "initial_code": "",
+                            "test_cases": [],
+                            "topic": topic,
+                            "difficulty": difficulty,
+                            "language": language
+                        }
+                    
                     next_step_data = {
                         "type": "CODE_TASK",
                         "code_task": {
-                            "topic": code_task.get("topic", "Python"),
-                            "difficulty": code_task.get("difficulty", "medium"),
-                            "language": code_task.get("language", "python")
+                            "topic": topic,
+                            "difficulty": difficulty,
+                            "language": language
                         }
                     }
                 else:
-                    question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                    question_text = next_question_text or answer_text
+                    if not question_text:
+                        question_text = "Следующий вопрос."
                     next_step_data = {
                         "type": "DIALOG",
                         "question_text": question_text
                     }
                 
-                return {
-                    "type": "DIALOG",
-                    "question_text": parsed.get("answerText", ""),
+                result = {
+                    "type": "DIALOG" if next_step_type == InterviewStepType["DIALOG"] else "CODE_TASK",
+                    "question_text": question_text,
                     "status": "IN_PROGRESS",
                     "score": parsed.get("score"),
-                    "ai_feedback": parsed.get("answerText", ""),
+                    "ai_feedback": answer_text,
                     "user_answer": user_answer,
                     "feedback": parsed.get("feedback", ""),
                     "next_step": next_step_data
                 }
+                
+                if full_code_task:
+                    result["code_task"] = full_code_task
+                
+                return result
             else:
                 answer_text = parsed.get("answerText", "")
                 return {
@@ -770,9 +821,10 @@ class InterviewAgent:
 ТВОЯ ЗАДАЧА:
 - Используй тип `new_step`
 - В `feedback` дай обратную связь по ответу (2 предложения)
-- В `answerText` кратко прокомментируй ответ (1-2 предложения)
+- В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
 - В `score` оцени ответ от 0 до 100
-- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)"""
+- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)
+- **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
         
         messages = self._get_messages_with_history(input_prompt)
         response = self.llm.invoke(messages)
@@ -806,20 +858,45 @@ class InterviewAgent:
             next_step = parsed.get("nextStep", {})
             next_step_type = next_step.get("type", InterviewStepType["DIALOG"])
             
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            
             next_step_data = None
+            full_code_task = None
+            
             if next_step_type == InterviewStepType["CODE_TASK"]:
                 code_task = next_step.get("codeTask", {})
+                topic = code_task.get("topic", "Python")
+                difficulty = code_task.get("difficulty", "medium")
+                language = code_task.get("language", "python")
+                
+                try:
+                    full_code_task = self.generate_code_task(topic, difficulty, language)
+                    question_text = f"{answer_text or 'Переходим к кодовой задаче.'}\n\n**Задача:**\n{full_code_task['description']}\n\n**Начальный код:**\n```{language}\n{full_code_task['initial_code']}\n```"
+                except Exception as e:
+                    logger.error(f"Ошибка генерации задачи: {e}")
+                    question_text = answer_text or "Переходим к кодовой задаче."
+                    full_code_task = {
+                        "description": "Ошибка генерации задачи",
+                        "initial_code": "",
+                        "test_cases": [],
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
+                    }
+                
                 next_step_data = {
                     "type": "CODE_TASK",
                     "code_task": {
-                        "topic": code_task.get("topic", "Python"),
-                        "difficulty": code_task.get("difficulty", "medium"),
-                        "language": code_task.get("language", "python")
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "language": language
                     }
                 }
-                question_text = parsed.get("answerText", "")
             else:
-                question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                question_text = next_question_text or answer_text
+                if not question_text:
+                    question_text = "Следующий вопрос."
                 next_step_data = {
                     "type": "DIALOG",
                     "question_text": question_text
@@ -828,7 +905,7 @@ class InterviewAgent:
             if is_last_step and not self.waiting_for_completion_confirmation:
                 self.waiting_for_completion_confirmation = True
             
-            return {
+            result = {
                 "type": "DIALOG" if next_step_type == InterviewStepType["DIALOG"] else "CODE_TASK",
                 "question_text": question_text,
                 "status": "COMPLETED" if self.interview_ended else "IN_PROGRESS",
@@ -838,6 +915,11 @@ class InterviewAgent:
                 "feedback": parsed.get("feedback", ""),
                 "next_step": next_step_data
             }
+            
+            if full_code_task:
+                result["code_task"] = full_code_task
+            
+            return result
         else:
             answer_text = parsed.get("answerText", "")
             
@@ -1008,9 +1090,10 @@ class InterviewAgent:
 ТВОЯ ЗАДАЧА:
 - Используй тип `new_step`
 - В `feedback` дай обратную связь по ответу (2 предложения)
-- В `answerText` кратко прокомментируй ответ (1-2 предложения)
+- В `answerText` кратко прокомментируй ответ (1-2 предложения) — **НЕ ДУБЛИРУЙ feedback**, это должен быть отдельный краткий комментарий
 - В `score` оцени ответ от 0 до 100
-- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)"""
+- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)
+- **ВАЖНО**: Если это позиция developer и прошло уже 2-3 диалоговых вопроса, используй CODE_TASK для проверки практических навыков"""
         
         messages = self._get_messages_with_history(input_prompt)
         full_response = ""
@@ -1071,41 +1154,17 @@ class InterviewAgent:
         
         test_results = run_code_tests(user_code, test_cases)
         
+        evaluation = self.code_task_agent.evaluate_code(
+            user_code=user_code,
+            task_description=task_description,
+            test_results=test_results
+        )
+        
+        code_score = evaluation.get("score", 0)
+        code_feedback = evaluation.get("feedback", "")
+        
         passed_count = sum(1 for r in test_results if r["status"] == "PASSED")
         total_count = len(test_results)
-        test_summary = f"Пройдено тестов: {passed_count}/{total_count}"
-        
-        test_results_text = "\n".join([
-            f"Тест {r['test_id']}: {r['status']}" + (f" - {r['details']}" if r.get('details') else "")
-            for r in test_results
-        ])
-        
-        prompt = f"""Кандидат отправил код для задачи: {task_description}
-
-Код кандидата:
-```python
-{user_code}
-```
-
-Результаты тестов:
-{test_summary}
-{test_results_text}
-
-Проанализируй код и результаты тестов. Дай фидбэк по коду, укажи что хорошо, что можно улучшить. Если тесты не прошли, объясни почему. Оцени код от 0 до 100.
-
-Формат ответа:
-ФИДБЭК: [твой фидбэк по коду]
-ОЦЕНКА: [число от 0 до 100]"""
-        
-        messages = self._get_messages_with_history(prompt)
-        response = self.llm.invoke(messages)
-        ai_response = response.content if hasattr(response, 'content') else str(response)
-        parsed = self._parse_ai_response(ai_response)
-        
-        code_score = parsed.get("score", 0)
-        if code_score is None:
-            code_score = int((passed_count / total_count) * 100) if total_count > 0 else 0
-        
         status = "COMPLETED" if passed_count == total_count and total_count > 0 else "IN_PROGRESS"
         
         return {
@@ -1113,10 +1172,10 @@ class InterviewAgent:
             "status": status,
             "user_code": user_code,
             "code_test_results": test_results,
-            "code_feedback": parsed.get("feedback") or ai_response,
+            "code_feedback": code_feedback,
             "code_score": code_score,
             "score": code_score,
-            "ai_feedback": parsed.get("feedback") or ai_response
+            "ai_feedback": code_feedback
         }
 
     def is_interview_complete(self) -> bool:
@@ -1137,61 +1196,8 @@ class InterviewAgent:
         difficulty: str,
         language: str,
     ) -> dict[str, Any]:
-        """Генерация полной задачи на код по параметрам."""
-        prompt = f"""Сгенерируй задачу на программирование.
-
-Требования:
-- Тема: {topic}
-- Сложность: {difficulty}
-- Язык: {language}
-
-Формат ответа (JSON в ```json ... ```):
-{{
-  "description": "Подробное описание задачи (2-3 предложения)",
-  "initial_code": "class Solution(object):\\n    def solve(self, ...):\\n        :type ...\\n        :rtype ...\\n        pass",
-  "test_cases": [
-    {{"input": "...", "output": "..."}},
-    {{"input": "...", "output": "..."}},
-    {{"input": "...", "output": "..."}}
-  ],
-  "topic": "{topic}",
-  "difficulty": "{difficulty}",
-  "language": "{language}"
-}}
-
-ВАЖНО:
-- initial_code должен быть в формате класса Solution с методом solve (как на LeetCode)
-- test_cases: массив из 2-3 тестов, каждый с полями "input" и "output"
-- input и output - строки, которые можно использовать для тестирования
-- description должна быть понятной и конкретной"""
-        
-        messages = [
-            SystemMessage(content="Ты помощник для генерации задач на программирование. Всегда возвращай валидный JSON в ```json ... ```."),
-            HumanMessage(content=prompt)
-        ]
-        
-        response = self.llm.invoke(messages)
-        response_text = response.content if hasattr(response, 'content') else str(response)
-        
-        parsed = self._extract_json(response_text)
-        if not parsed:
-            raise RuntimeError(f"Не удалось извлечь JSON из ответа модели: {response_text[:200]}")
-        
-        if not parsed.get("description") or not parsed.get("test_cases"):
-            raise RuntimeError("Модель не вернула полную задачу")
-        
-        test_cases = parsed.get("test_cases", [])
-        if len(test_cases) > 3:
-            test_cases = test_cases[:3]
-        
-        return {
-            "description": parsed.get("description", ""),
-            "initial_code": parsed.get("initial_code", ""),
-            "test_cases": test_cases,
-            "topic": topic,
-            "difficulty": difficulty,
-            "language": language
-        }
+        """Генерация полной задачи на код по параметрам используя кодовую модель."""
+        return self.code_task_agent.generate_code_task(topic, difficulty, language)
 
     def reset(self):
         """Сброс истории разговора."""
