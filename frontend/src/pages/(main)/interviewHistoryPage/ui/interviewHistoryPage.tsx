@@ -64,7 +64,7 @@ const InterviewHistoryPage = () => {
 
   return (
     <div>
-      <div className="max-w-7xl mx-auto px-6 pb-12 space-y-4">
+      <div className="max-w-6xl mx-auto px-6 pb-12 space-y-4">
         <div className="relative mt-4">
           <Image
             src="/images/blue-banner-v2.png"

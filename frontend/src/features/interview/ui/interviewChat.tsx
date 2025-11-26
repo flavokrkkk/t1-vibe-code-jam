@@ -12,6 +12,8 @@ import { FileText } from "lucide-react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { Button } from "@/shared/ui/button/button";
 import InterviewReport from "./interviewReport";
+import { motion } from "framer-motion";
+import { TypingIndicator } from "./typingIndicator";
 
 interface InterviewChatProps {
   initialInterview: Interview;
@@ -25,15 +27,60 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
 
   const isCurrentStepCodeTask = currentStep?.type === "CODE_TASK";
 
-  const [isAILoading] = useState(false);
   const [currentCode, setCurrentCode] = useState(
     currentStep?.user_code ?? currentStep?.code_task?.initial_code ?? ""
   );
+  const [elapsedTime, setElapsedTime] = useState(0); // в секундах
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  const { mutate: sendMessage } = useInterviewMessage();
+  const { mutate: sendMessage, isPending: isSendingMessage } =
+    useInterviewMessage();
 
-  const { mutate: submitCode } = useCodeSubmit();
+  const { mutate: submitCode, isPending: isSubmittingCode } = useCodeSubmit();
+
+  const isInterviewCompleted = useMemo(() => {
+    return (
+      initialInterview.status === InterviewStatus.COMPLETED ||
+      (initialInterview.overall_feedback !== null &&
+        initialInterview.total_score !== null)
+    );
+  }, [initialInterview]);
+
+  const isAILoading = isSendingMessage || isSubmittingCode;
+
+  // Таймер собеседования
+  useEffect(() => {
+    const interviewStart = new Date(initialInterview.created_at).getTime();
+
+    const updateElapsed = () => {
+      const now = Date.now();
+      const diffSeconds = Math.max(
+        0,
+        Math.floor((now - interviewStart) / 1000)
+      );
+      setElapsedTime(diffSeconds);
+    };
+
+    updateElapsed();
+
+    // Останавливаем таймер, если интервью завершено
+    if (isInterviewCompleted) {
+      return;
+    }
+
+    const intervalId = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInterview.created_at, isInterviewCompleted]);
+
+  const formattedElapsedTime = useMemo(() => {
+    const minutes = Math.floor(elapsedTime / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = (elapsedTime % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }, [elapsedTime]);
 
   const handleSendMessage = async (text: string) => {
     if (isAILoading) return;
@@ -55,13 +102,17 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
     });
   };
 
-  const isInterviewCompleted = useMemo(() => {
-    return (
-      initialInterview.status === InterviewStatus.COMPLETED ||
-      (initialInterview.overall_feedback !== null &&
-        initialInterview.total_score !== null)
-    );
-  }, [initialInterview]);
+  const progressData = useMemo(() => {
+    const totalTasks = initialInterview.amount_of_tasks;
+    const currentStep = initialInterview.current_step_index + 1;
+    const progress = Math.min((currentStep / totalTasks) * 100, 100);
+
+    return {
+      current: currentStep,
+      total: totalTasks,
+      percentage: progress,
+    };
+  }, [initialInterview.current_step_index, initialInterview.amount_of_tasks]);
 
   const { codeTaskData, currentTestResults } = useMemo(() => {
     const codeTask = currentStep?.code_task;
@@ -90,52 +141,116 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
 
   useChatAutoScroll<HTMLDivElement>(chatContainerRef, [
     initialInterview.chat_messages,
+    isAILoading,
   ]);
+
+  const shouldShowTypingIndicator = useMemo(() => {
+    if (!isAILoading) return false;
+
+    const lastMessage =
+      initialInterview.chat_messages[initialInterview.chat_messages.length - 1];
+
+    const hasLastAnswerWithContent =
+      lastMessage &&
+      lastMessage.sender === "AI" &&
+      lastMessage.text &&
+      lastMessage.text.trim() !== "";
+
+    if (hasLastAnswerWithContent) return false;
+
+    return true;
+  }, [isAILoading, initialInterview.chat_messages]);
 
   return (
     <div className="flex h-screen text-white w-full space-x-2 p-2">
       <div className="flex-grow flex bg-white flex-col z-10 rounded-3xl w-full items-center">
-        <div className="flex items-center justify-between px-5 py-3 bg-[#3d66ff] transition-colors ease-in-out rounded-t-[22px] w-full">
-          <div className="flex items-center gap-3">
-            <span className="text-[17px]">
-              {initialInterview.job_role_description}
-            </span>
-            {!isInterviewCompleted && (
-              <span className="text-xs text-zinc-200">
-                ({initialInterview.current_step_index + 1} из{" "}
-                {initialInterview.amount_of_tasks +
-                  (initialInterview.steps[0]?.type === "DIALOG" ? 0 : 0)}
-                )
+        <div className="flex flex-col bg-[#3d66ff] transition-colors ease-in-out rounded-t-[22px] w-full">
+          <div className="flex items-center justify-between px-5 py-2 gap-4">
+            <div className="flex gap-3 flex-1 min-w-0">
+              <span className="text-[17px] font-medium truncate">
+                {initialInterview.job_role_description}
               </span>
+              <div className="flex items-center gap-3 text-[11px] text-zinc-100/90">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                  <span className="uppercase tracking-wide">Интервью</span>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">
+                  <span className="opacity-80">Время:</span>
+                  <span className="font-mono font-semibold">
+                    {formattedElapsedTime}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="text-xs text-zinc-100 whitespace-nowrap ml-2">
+              Шаг {progressData.current} из {progressData.total}
+            </div>
+            {isInterviewCompleted && (
+              <Button
+                className={cn(
+                  "flex items-center space-x-1 w-full sm:w-auto rounded-xl",
+                  "text-white text-[13px] p-2 px-4",
+                  "hover:bg-white/30 font-medium",
+                  "bg-white/20 border border-white/30",
+                  "focus:ring-1 focus:ring-white/50",
+                  "transition-all duration-200"
+                )}
+                asChild
+              >
+                <PDFDownloadLink
+                  document={<InterviewReport interview={initialInterview} />}
+                  fileName={`Interview_${initialInterview.job_role_description.slice(
+                    0,
+                    30
+                  )}_${new Date().toISOString().split("T")[0]}.pdf`}
+                >
+                  {({ loading }) => (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      <span>{loading ? "Генерация..." : "Скачать отчет"}</span>
+                    </>
+                  )}
+                </PDFDownloadLink>
+              </Button>
             )}
           </div>
-          {isInterviewCompleted && (
-            <Button
-              className={cn(
-                "flex items-center space-x-1 w-full sm:w-auto rounded-xl",
-                "text-white text-[13px] p-2 px-4",
-                "hover:bg-white/30 font-medium",
-                "bg-white/20 border border-white/30",
-                "focus:ring-1 focus:ring-white/50",
-                "transition-all duration-200"
-              )}
-              asChild
-            >
-              <PDFDownloadLink
-                document={<InterviewReport interview={initialInterview} />}
-                fileName={`Interview_${initialInterview.job_role_description.slice(
-                  0,
-                  30
-                )}_${new Date().toISOString().split("T")[0]}.pdf`}
-              >
-                {({ loading }) => (
-                  <>
-                    <FileText className="w-4 h-4" />
-                    <span>{loading ? "Генерация..." : "Скачать отчет"}</span>
-                  </>
-                )}
-              </PDFDownloadLink>
-            </Button>
+
+          {!isInterviewCompleted && (
+            <div className="px-5 pb-3">
+              <div className="relative w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                <motion.div
+                  className="absolute top-0 left-0 h-full bg-white rounded-full shadow-lg"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressData.percentage}%` }}
+                  transition={{
+                    duration: 0.6,
+                    ease: [0.4, 0, 0.2, 1],
+                  }}
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #ffffff 0%, #e0e7ff 100%)",
+                  }}
+                >
+                  <motion.div
+                    className="absolute inset-0 bg-white/30"
+                    animate={{
+                      x: ["-100%", "100%"],
+                    }}
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    style={{
+                      background:
+                        "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)",
+                      width: "50%",
+                    }}
+                  />
+                </motion.div>
+              </div>
+            </div>
           )}
         </div>
         {isInterviewCompleted ? (
@@ -152,15 +267,10 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
                 {initialInterview.chat_messages.map((msg) => (
                   <ChatMessageBubble key={msg.id} message={msg} />
                 ))}
-                {isAILoading && (
-                  <ChatMessageBubble
-                    message={{
-                      id: "loading-ai",
-                      sender: "AI",
-                      text: "ИИ думает...",
-                      timestamp: new Date().toISOString(),
-                    }}
-                  />
+                {shouldShowTypingIndicator && (
+                  <div className="bg-white text-zinc-700 self-start rounded-3xl rounded-bl-none border border-blue-400/20 p-4 my-2">
+                    <TypingIndicator />
+                  </div>
                 )}
               </div>
             </div>

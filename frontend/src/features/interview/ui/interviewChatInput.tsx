@@ -129,9 +129,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <div className="mx-auto px-4 md:px-0 pb-4 rounded-4xl relative">
         <div className="relative overflow-visible">
           {isRecording ? (
-            <div className="w-full min-h-[50px] rounded-[24px] shadow-sm mb-[13px] px-12 py-3 pr-20 bg-white border border-gray-200 flex items-center relative">
+            <div className="w-full min-h-[50px] rounded-[24px] shadow-sm px-12 py-3 pr-20 bg-white border border-gray-200 flex items-center relative">
               <div className="flex-1 flex items-center px-2">
-                <div className="flex-1 border-b-2 border-dotted border-gray-400"></div>
+                <div className="flex-1 border-b-2 border-dotted border-gray-400" />
                 <span className="ml-3 text-sm text-gray-500">
                   {formatTime(elapsedSec)}
                 </span>

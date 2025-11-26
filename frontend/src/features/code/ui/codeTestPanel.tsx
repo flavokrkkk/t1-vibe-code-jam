@@ -101,17 +101,17 @@ export const TestPanel: React.FC<TestPanelProps> = ({
             </div>
           </section>
         ) : (
-          <div className="text-gray-500 text-center py-8">
-            <p className="mb-2">No test case selected.</p>
-            <p>Please select a test case or add a new one.</p>
+          <div className="text-gray-500 text-center py-8 h-full flex flex-col justify-center items-center">
+            <p className="mb-2">Тестовый случай не выбран.</p>
+            <p>Пожалуйста, выберите тестовый случай или добавьте новый.</p>
             <button
               disabled={isAILoading}
               className={cn(
-                "mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md",
+                "mt-4 px-4 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-3xl",
                 isAILoading && "opacity-50 cursor-not-allowed"
               )}
             >
-              Add First Test Case
+              Добавить первый тестовый случай
             </button>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { authApi } from "@/shared/api/baseQueryInstance";
+import { authApi, authApiLongTimeout } from "@/shared/api/baseQueryInstance";
 import { Interview, InterviewListItem } from "../types/types";
 import { ErrorMessages } from "@/shared/api/queryError";
 
@@ -10,10 +10,7 @@ class InterviewService {
     createInterviewDto: CreateInterviewFormData
   ): Promise<Interview> {
     try {
-      return await authApi
-        .extend({
-          timeout: 90000,
-        })
+      return await authApiLongTimeout
         .post(EInterviewEndpoints.INTERVIEWS_CREATE, {
           json: createInterviewDto,
         })
@@ -76,10 +73,7 @@ class InterviewService {
     userCode: string;
   }): Promise<Interview> {
     try {
-      return await authApi
-        .extend({
-          timeout: 90000,
-        })
+      return await authApiLongTimeout
         .post(
           `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/steps/${stepId}/code`,
           {
@@ -104,10 +98,7 @@ class InterviewService {
     text: string;
   }): Promise<Interview> {
     try {
-      return await authApi
-        .extend({
-          timeout: 90000,
-        })
+      return await authApiLongTimeout
         .post(
           `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/message`,
           {

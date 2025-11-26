@@ -295,7 +295,7 @@ const InterviewReport: React.FC<InterviewReportProps> = ({ interview }) => {
               <View key={msg.id} style={styles.chatMessage}>
                 <Text style={styles.chatSender}>
                   {msg.sender === "USER" ? "Кандидат" : "AI Интервьюер"} (
-                  {formatDate(msg.timestamp)}):
+                  {formatDate(msg.created_at)}):
                 </Text>
                 <Text style={styles.chatText}>{sanitize(msg.text)}</Text>
               </View>

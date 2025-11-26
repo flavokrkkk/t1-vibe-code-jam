@@ -11,7 +11,7 @@ interface SendChatMessageArgs {
 export const useInterviewMessage = () => {
   const queryClient = useQueryClient();
 
-  return useMutation<Interview, Error, SendChatMessageArgs>({
+  const mutation = useMutation<Interview, Error, SendChatMessageArgs>({
     mutationFn: ({ interviewId, text }) =>
       sendChatMessage({ interviewId, text }),
     onMutate: async (variables) => {
@@ -32,7 +32,7 @@ export const useInterviewMessage = () => {
               id: crypto.randomUUID(),
               sender: "USER",
               text: variables.text,
-              timestamp: new Date().toISOString(),
+              created_at: new Date().toISOString(),
             },
           ],
         };
@@ -47,4 +47,9 @@ export const useInterviewMessage = () => {
     },
     retry: false,
   });
+
+  return {
+    ...mutation,
+    isPending: mutation.isPending,
+  };
 };

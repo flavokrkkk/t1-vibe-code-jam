@@ -22,7 +22,7 @@ const PrivatePage: FC<PropsWithChildren> = ({ children }) => {
       setIsLoading(false);
     } else {
       setIsLoading(false);
-      navigate(`/${ERouteNames.AUTH_ROUTE}/${ERouteNames.LOGIN_ROUTE}`);
+      navigate(`/${ERouteNames.LANDING_ROUTE}`);
     }
   }, [pathname]);
 

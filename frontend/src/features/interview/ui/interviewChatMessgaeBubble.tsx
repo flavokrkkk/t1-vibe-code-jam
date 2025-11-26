@@ -17,14 +17,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     : "bg-white text-zinc-700 self-start rounded-bl-none border border-blue-400/20";
 
   const formattedTime = React.useMemo(() => {
-    const dateTime = DateTime.fromISO(message.timestamp);
+    const dateTime = DateTime.fromISO(message.created_at);
     return dateTime.isValid ? dateTime.toFormat("HH:mm") : "";
-  }, [message.timestamp]);
+  }, [message.created_at]);
 
   return (
     <div
       className={cn(
-        "max-w-[70%] min-w-0 p-4 rounded-xl my-2 break-words",
+        "max-w-[70%] min-w-0 p-4 rounded-3xl my-2 break-words",
         bubbleClasses
       )}
       style={{ overflowWrap: "break-word", wordBreak: "break-word" }}
@@ -61,9 +61,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           {message.text}
         </ReactMarkdown>
       </div>
-      <div className="text-xs text-right opacity-75 mt-1">
-        {formattedTime}
-      </div>
+      <div className="text-xs text-right opacity-75 mt-1">{formattedTime}</div>
     </div>
   );
 };

@@ -16,7 +16,7 @@ const ProfilePage = () => {
 
   return (
     <div className="relative h-full">
-      <div className="p-2 md:p-4 max-w-5xl mx-auto">
+      <div className="p-2 md:p-4 max-w-6xl mx-auto">
         <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 h-32 md:h-48 relative rounded-2xl md:rounded-4xl">
           <div className="absolute -bottom-12 md:-bottom-16 left-1/2 transform -translate-x-1/2">
             <Avatar className="relative h-32 w-32 md:h-40 md:w-40 ring-4 ring-white shadow-xl">

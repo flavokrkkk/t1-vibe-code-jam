@@ -2,7 +2,7 @@ export type ChatMessage = {
   id: string;
   sender: "USER" | "AI";
   text: string;
-  timestamp: string;
+  created_at: string;
 };
 
 export interface OllamaGenerateResponse {

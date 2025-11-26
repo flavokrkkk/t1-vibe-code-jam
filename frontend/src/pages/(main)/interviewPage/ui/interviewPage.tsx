@@ -1,34 +1,34 @@
-import { useState, useEffect } from "react";
+// import { useState, useEffect } from "react";
 import { useInterview } from "@/entities/interview/hooks/useInterview";
 import { InterviewChat } from "@/features/interview/ui/interviewChat";
-import { AntiCheatProvider } from "@/shared/lib/antiCheat/antiCheatProvider";
-import { AntiCheatRulesDialog } from "@/features/interview/ui/antiCheatRulesDialog";
-import {
-  hasAcceptedRules,
-  setRulesAccepted,
-} from "@/shared/lib/antiCheat/rulesStorage";
+// import { AntiCheatProvider } from "@/shared/lib/antiCheat/antiCheatProvider";
+// import { AntiCheatRulesDialog } from "@/features/interview/ui/antiCheatRulesDialog";
+// import {
+//   hasAcceptedRules,
+//   setRulesAccepted,
+// } from "@/shared/lib/antiCheat/rulesStorage";
 
 const InterviewPage = () => {
   const { data: interview } = useInterview();
-  const [showRulesDialog, setShowRulesDialog] = useState(false);
-  const [rulesAccepted, setRulesAcceptedState] = useState(false);
+  // const [showRulesDialog, setShowRulesDialog] = useState(false);
+  // const [rulesAccepted, setRulesAcceptedState] = useState(false);
 
-  useEffect(() => {
-    if (interview) {
-      const accepted = hasAcceptedRules(interview.id);
-      setRulesAcceptedState(accepted);
-      if (!accepted) {
-        setShowRulesDialog(true);
-      }
-    }
-  }, [interview]);
+  // useEffect(() => {
+  //   if (interview) {
+  //     const accepted = hasAcceptedRules(interview.id);
+  //     setRulesAcceptedState(accepted);
+  //     if (!accepted) {
+  //       setShowRulesDialog(true);
+  //     }
+  //   }
+  // }, [interview]);
 
-  const handleAcceptRules = () => {
-    if (interview) {
-      setRulesAccepted(interview.id);
-      setRulesAcceptedState(true);
-    }
-  };
+  // const handleAcceptRules = () => {
+  //   if (interview) {
+  //     setRulesAccepted(interview.id);
+  //     setRulesAcceptedState(true);
+  //   }
+  // };
 
   if (!interview) return null;
 

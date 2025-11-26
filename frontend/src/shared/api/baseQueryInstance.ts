@@ -15,9 +15,8 @@ export const publicApi = ky.create({
   parseJson: (text) => JSON.parse(text),
 });
 
-export const authApi = ky.create({
+const authApiConfig = {
   prefixUrl: API_BASE_URL,
-  timeout: 10000, // Базовый таймаут для обычных запросов
   hooks: {
     beforeRequest: [
       (request) => {
@@ -59,4 +58,16 @@ export const authApi = ky.create({
     ],
   },
   parseJson: (text) => JSON.parse(text),
+};
+
+// Базовый API с обычным таймаутом для быстрых запросов
+export const authApi = ky.create({
+  ...authApiConfig,
+  timeout: 10000,
+});
+
+// API с увеличенным таймаутом для длительных операций (ML сервис, обработка кода)
+export const authApiLongTimeout = ky.create({
+  ...authApiConfig,
+  timeout: 90000, // 90 секунд для операций с ML сервисом
 });

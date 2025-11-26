@@ -18,6 +18,8 @@ const ClaimInterviewPage = lazy(
   () => import("@/pages/(main)/claimInterviewPage")
 );
 
+const LandingPage = lazy(() => import("@/pages/(main)/landingPage"));
+
 const RegisterPage = lazy(() => import("@/pages/(auth)/registerPage"));
 const LoginPage = lazy(() => import("@/pages/(auth)/loginPage"));
 
@@ -65,6 +67,10 @@ export const routes = createBrowserRouter([
             },
           ]),
         ],
+      },
+      {
+        path: ERouteNames.LANDING_ROUTE,
+        element: <LandingPage />,
       },
       {
         path: ERouteNames.AUTH_ROUTE,
