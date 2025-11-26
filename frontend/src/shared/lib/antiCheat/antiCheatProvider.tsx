@@ -1,14 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAntiCheatDetection } from "./useAntiCheatDetection";
-import {
-  getWarnings,
-  addWarning,
-  hasReachedMaxWarnings,
-  MAX_WARNINGS_COUNT,
-} from "./storage";
+import { getWarnings, addWarning } from "./storage";
 import type { AntiCheatViolation, AntiCheatWarning } from "./types";
-import { ERouteNames } from "@/shared/lib/routeVariables";
 import {
   Dialog,
   DialogContent,
@@ -16,8 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog/dialog";
-import { Button } from "@/shared/ui/button/button";
-import { cn } from "@/shared/lib/mergeClass";
 
 interface AntiCheatContextValue {
   warnings: number;
@@ -40,7 +31,6 @@ export const AntiCheatProvider: React.FC<AntiCheatProviderProps> = ({
   onWarning,
   enabled = true,
 }) => {
-  const navigate = useNavigate();
   const [warnings, setWarnings] = useState(() => getWarnings(interviewId));
   const [currentViolation, setCurrentViolation] =
     useState<AntiCheatViolation | null>(null);
@@ -59,14 +49,8 @@ export const AntiCheatProvider: React.FC<AntiCheatProviderProps> = ({
 
       onWarning?.(warning);
       setCurrentViolation(violation);
-
-      if (hasReachedMaxWarnings(interviewId)) {
-        setTimeout(() => {
-          navigate(`/${ERouteNames.DASHBOARD_ROUTE}`, { replace: true });
-        }, 2000);
-      }
     },
-    [enabled, interviewId, navigate, onWarning]
+    [enabled, interviewId, onWarning]
   );
 
   const clearWarnings = useCallback(() => {
@@ -116,11 +100,8 @@ interface WarningDialogProps {
 
 const WarningDialog: React.FC<WarningDialogProps> = ({
   violation,
-  warningNumber,
   onClose,
 }) => {
-  const isMaxWarnings = warningNumber >= MAX_WARNINGS_COUNT;
-
   const getViolationMessage = (type: AntiCheatViolation["type"]): string => {
     switch (type) {
       case "TAB_SWITCH":
@@ -152,28 +133,15 @@ const WarningDialog: React.FC<WarningDialogProps> = ({
             />
           </div>
 
-          <DialogHeader className="space-y-2 text-center flex flex-col items-center">
+          <DialogHeader className="space-y-2 text-center flex flex-col items-center mb-6">
             <DialogTitle className="text-2xl font-bold tracking-tight text-gray-900 text-center w-full">
-              {isMaxWarnings
-                ? "Превышен лимит предупреждений"
-                : "Предупреждение"}
+              Предупреждение
             </DialogTitle>
-            <DialogDescription className="text-gray-700 leading-relaxed text-sm text-center w-full">
+            <DialogDescription className="text-gray-700 leading-relaxed text-base text-center w-full">
               {getViolationMessage(violation.type)}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="w-full text-center space-y-2 mb-4">
-            <p
-              className={cn(
-                "text-base",
-                isMaxWarnings ? "text-red-600" : "text-yellow-600"
-              )}
-            >
-              {warningNumber} из {MAX_WARNINGS_COUNT}
-            </p>
-          </div>
-
+          {/* 
           <div className="w-full flex justify-center">
             <Button
               onClick={onClose}
@@ -181,7 +149,7 @@ const WarningDialog: React.FC<WarningDialogProps> = ({
             >
               Понятно
             </Button>
-          </div>
+          </div> */}
         </div>
       </DialogContent>
     </Dialog>

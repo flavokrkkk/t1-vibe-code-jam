@@ -34,14 +34,17 @@ export const AntiCheatRulesDialog: React.FC<AntiCheatRulesDialogProps> = ({
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) return;
+    if (!newOpen) {
+      handleCancel();
+      return;
+    }
     onOpenChange(newOpen);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
       <DialogContent
-        className="max-w-2xl border-0 bg-white p-7 shadow-2xl [&>button]:hidden"
+        className="max-w-2xl border-0 bg-white p-7 shadow-2xl"
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
@@ -51,8 +54,8 @@ export const AntiCheatRulesDialog: React.FC<AntiCheatRulesDialogProps> = ({
             Правила античитинга
           </DialogTitle>
           <DialogDescription className="text-left text-sm text-gray-600 leading-snug">
-            При нарушении правил вы получите предупреждение. После 3
-            предупреждений интервью будет завершено автоматически.
+            При нарушении правил вы получите предупреждение. Все нарушения
+            фиксируются в процессе интервью.
           </DialogDescription>
         </DialogHeader>
 

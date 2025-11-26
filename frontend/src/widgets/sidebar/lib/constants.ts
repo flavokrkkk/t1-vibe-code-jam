@@ -2,13 +2,17 @@ import { ERouteNames } from "@/shared/lib/routeVariables";
 import {
   Building,
   ClipboardList,
-  Cloud,
+  BarChart,
   HardDrive,
   Settings,
 } from "lucide-react";
 
 export const mainNavItems = [
-  { icon: Cloud, label: "AI Мок-интервью", path: "/mock-interview" },
+  {
+    icon: BarChart,
+    label: "Аналитика интервью",
+    path: `/${ERouteNames.DASHBOARD_ROUTE}/analitics`,
+  },
   {
     icon: ClipboardList,
     label: "История интервью",
