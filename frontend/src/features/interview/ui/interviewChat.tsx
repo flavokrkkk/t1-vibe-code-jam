@@ -103,7 +103,7 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
         <div className="flex flex-col bg-[#3d66ff] transition-colors ease-in-out rounded-t-[22px] w-full">
           <div className="flex items-center justify-between px-5 py-2 gap-4">
             <div className="flex gap-3 flex-1 min-w-0">
-              <span className="text-[17px] font-medium truncate">
+              <span className="text-[17px] font-medium truncate pb-[2px]">
                 {initialInterview.job_role_description}
               </span>
               <div className="flex items-center gap-3 text-[11px] text-zinc-100/90">

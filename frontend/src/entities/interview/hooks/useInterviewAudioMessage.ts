@@ -33,7 +33,7 @@ export const useInterviewAudioMessage = () => {
             {
               id: crypto.randomUUID(),
               sender: "USER",
-              text: "[Обработка аудио...]",
+              text: "speach_id",
               created_at: new Date().toISOString(),
               isTyping: true,
             },
