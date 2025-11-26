@@ -1,5 +1,5 @@
-import { Interview, InterviewStatus } from "@/entities/interview/types/types";
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import { Interview } from "@/entities/interview/types/types";
+import React, { useState, useRef, useEffect } from "react";
 import { ChatMessageBubble } from "./interviewChatMessgaeBubble";
 import { ChatInput } from "./interviewChatInput";
 import { TaskCodeEditor } from "@/features/code/ui/taskCodeEditor";
@@ -14,6 +14,13 @@ import { Button } from "@/shared/ui/button/button";
 import InterviewReport from "./interviewReport";
 import { motion } from "framer-motion";
 import { TypingIndicator } from "./typingIndicator";
+import {
+  useCurrentCodeTask,
+  useInterviewCompleted,
+  useInterviewProgress,
+  useInterviewTimer,
+  useTypingIndicator,
+} from "../hooks/useInterviewChat";
 
 interface InterviewChatProps {
   initialInterview: Interview;
@@ -30,7 +37,6 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
   const [currentCode, setCurrentCode] = useState(
     currentStep?.user_code ?? currentStep?.code_task?.initial_code ?? ""
   );
-  const [elapsedTime, setElapsedTime] = useState(0); // в секундах
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const { mutate: sendMessage, isPending: isSendingMessage } =
@@ -38,49 +44,12 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
 
   const { mutate: submitCode, isPending: isSubmittingCode } = useCodeSubmit();
 
-  const isInterviewCompleted = useMemo(() => {
-    return (
-      initialInterview.status === InterviewStatus.COMPLETED ||
-      (initialInterview.overall_feedback !== null &&
-        initialInterview.total_score !== null)
-    );
-  }, [initialInterview]);
-
+  const isInterviewCompleted = useInterviewCompleted(initialInterview);
   const isAILoading = isSendingMessage || isSubmittingCode;
-
-  // Таймер собеседования
-  useEffect(() => {
-    const interviewStart = new Date(initialInterview.created_at).getTime();
-
-    const updateElapsed = () => {
-      const now = Date.now();
-      const diffSeconds = Math.max(
-        0,
-        Math.floor((now - interviewStart) / 1000)
-      );
-      setElapsedTime(diffSeconds);
-    };
-
-    updateElapsed();
-
-    // Останавливаем таймер, если интервью завершено
-    if (isInterviewCompleted) {
-      return;
-    }
-
-    const intervalId = setInterval(updateElapsed, 1000);
-
-    return () => clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialInterview.created_at, isInterviewCompleted]);
-
-  const formattedElapsedTime = useMemo(() => {
-    const minutes = Math.floor(elapsedTime / 60)
-      .toString()
-      .padStart(2, "0");
-    const seconds = (elapsedTime % 60).toString().padStart(2, "0");
-    return `${minutes}:${seconds}`;
-  }, [elapsedTime]);
+  const { formatted: formattedElapsedTime } = useInterviewTimer(
+    initialInterview,
+    isInterviewCompleted
+  );
 
   const handleSendMessage = async (text: string) => {
     if (isAILoading) return;
@@ -102,29 +71,8 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
     });
   };
 
-  const progressData = useMemo(() => {
-    const totalTasks = initialInterview.amount_of_tasks;
-    const currentStep = initialInterview.current_step_index + 1;
-    const progress = Math.min((currentStep / totalTasks) * 100, 100);
-
-    return {
-      current: currentStep,
-      total: totalTasks,
-      percentage: progress,
-    };
-  }, [initialInterview.current_step_index, initialInterview.amount_of_tasks]);
-
-  const { codeTaskData, currentTestResults } = useMemo(() => {
-    const codeTask = currentStep?.code_task;
-    return {
-      codeTaskData: {
-        initialCode: currentStep?.user_code ?? codeTask?.initial_code ?? "",
-        language: codeTask?.language ?? "typescript",
-        testCases: codeTask?.test_cases ?? [],
-      },
-      currentTestResults: currentStep?.code_test_results ?? [],
-    };
-  }, [currentStep]);
+  const progressData = useInterviewProgress(initialInterview);
+  const { codeTaskData, currentTestResults } = useCurrentCodeTask(currentStep);
 
   useEffect(() => {
     if (isCurrentStepCodeTask) {
@@ -144,22 +92,10 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
     isAILoading,
   ]);
 
-  const shouldShowTypingIndicator = useMemo(() => {
-    if (!isAILoading) return false;
-
-    const lastMessage =
-      initialInterview.chat_messages[initialInterview.chat_messages.length - 1];
-
-    const hasLastAnswerWithContent =
-      lastMessage &&
-      lastMessage.sender === "AI" &&
-      lastMessage.text &&
-      lastMessage.text.trim() !== "";
-
-    if (hasLastAnswerWithContent) return false;
-
-    return true;
-  }, [isAILoading, initialInterview.chat_messages]);
+  const shouldShowTypingIndicator = useTypingIndicator(
+    initialInterview,
+    isAILoading
+  );
 
   return (
     <div className="flex h-screen text-white w-full space-x-2 p-2">

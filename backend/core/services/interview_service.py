@@ -48,7 +48,7 @@ class InterviewService(BaseDbModelService[Interview]):
         preferences: str | None = None,
     ) -> InterviewSchema:
         public_token = str(uuid.uuid4())
-        
+
         interview = Interview(
             user_id=user_id,
             creator_id=user_id,
@@ -66,17 +66,17 @@ class InterviewService(BaseDbModelService[Interview]):
         # Вызываем ML API для получения первого шага
         # Используем interview.id как session_id для согласованности
         session_id = str(interview.id)
-        
+
         ml_response = await self.ml_client.start_interview(
             job_title=job_role_description,
             required_skills=key_skills or [],
             amount_of_tasks=amount_of_tasks,
             session_id=session_id,
         )
-        
+
         # ML API возвращает session_id и step
         step_data = ml_response.get("step", {})
-        
+
         await self._process_ml_step(interview, step_data)
         await self.session.commit()
         await self.session.refresh(interview)
@@ -89,12 +89,12 @@ class InterviewService(BaseDbModelService[Interview]):
         step_type = step_data.get("type", "DIALOG")
         question_text = step_data.get("question_text", "")
         ai_feedback = step_data.get("ai_feedback", "")
-        
+
         # Текст сообщения от AI - это вопрос или фидбэк
         message_text = question_text or ai_feedback
-        
+
         if not message_text and step_type == "DIALOG":
-             message_text = "Здравствуйте! Готовы начать?"
+            message_text = "Здравствуйте! Готовы начать?"
 
         # Создаем шаг интервью
         step = InterviewStep(
@@ -104,7 +104,7 @@ class InterviewService(BaseDbModelService[Interview]):
             question_text=message_text,
         )
         self.session.add(step)
-        
+
         # Создаем сообщение от AI
         if message_text:
             message = ChatMessage(
@@ -113,7 +113,7 @@ class InterviewService(BaseDbModelService[Interview]):
                 text=message_text,
             )
             self.session.add(message)
-            
+
         await self.session.flush()
 
     async def find_all_user_interviews(
@@ -137,7 +137,9 @@ class InterviewService(BaseDbModelService[Interview]):
         for interview, steps, chat_messages in interviews:
             interview.steps_count = steps
             interview.chat_messages_count = chat_messages
-            interviews_list.append(ListInterviewItemSchema.model_validate(interview, from_attributes=True))
+            interviews_list.append(
+                ListInterviewItemSchema.model_validate(interview, from_attributes=True)
+            )
         return interviews_list
 
     async def find_interview_by_token(
@@ -167,21 +169,20 @@ class InterviewService(BaseDbModelService[Interview]):
         user_id: UUID,
     ) -> Interview:
         result = await self.session.execute(
-            select(Interview)
-            .where(Interview.public_token == public_token)
+            select(Interview).where(Interview.public_token == public_token)
         )
         interview = result.scalar_one_or_none()
-        
+
         if not interview:
             raise NotFoundException("Интервью не найдено.")
-        
+
         if interview.user_id == user_id:
             raise BadRequestException("Вы уже приняли приглашение.")
-        
+
         interview.user_id = user_id
         await self.session.commit()
         await self.session.refresh(interview)
-        
+
         interview = await self.find_interview_by_id(interview.id, None)
         return InterviewSchema.model_validate(interview, from_attributes=True)
 
@@ -192,7 +193,9 @@ class InterviewService(BaseDbModelService[Interview]):
     ) -> Interview:
         query = select(Interview).where(Interview.id == interview_id)
         if user_id:
-            query = query.where(or_(Interview.user_id == user_id, Interview.creator_id == user_id))
+            query = query.where(
+                or_(Interview.user_id == user_id, Interview.creator_id == user_id)
+            )
 
         result = await self.session.execute(
             query.options(
@@ -242,18 +245,18 @@ class InterviewService(BaseDbModelService[Interview]):
 
         # Используем interview.id как session_id (должен совпадать с тем, что был передан при создании)
         session_id = str(interview_id)
-        
+
         # Вызываем ML API для обработки ответа
         ml_response = await self.ml_client.process_message(
             session_id=session_id,
             user_answer=text,
         )
-        
+
         # Обновляем текущий шаг
         await self._update_current_step(interview, ml_response, text)
-        
+
         status = ml_response.get("status", "IN_PROGRESS")
-        
+
         if status != "COMPLETED":
             # Если интервью продолжается - создаем новый шаг
             await self._process_ml_step(interview, ml_response)
@@ -262,10 +265,14 @@ class InterviewService(BaseDbModelService[Interview]):
             # Интервью завершено
             interview.status = InterviewStatus.COMPLETED
             interview.total_score = ml_response.get("score")
-            interview.overall_feedback = ml_response.get("ai_feedback") or ml_response.get("feedback")
-            
+            interview.overall_feedback = ml_response.get(
+                "ai_feedback"
+            ) or ml_response.get("feedback")
+
             # Добавляем финальное сообщение от AI (фидбэк)
-            final_message_text = ml_response.get("ai_feedback") or ml_response.get("feedback")
+            final_message_text = ml_response.get("ai_feedback") or ml_response.get(
+                "feedback"
+            )
             if final_message_text:
                 final_message = ChatMessage(
                     interview_id=interview.id,
@@ -277,13 +284,15 @@ class InterviewService(BaseDbModelService[Interview]):
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
 
-    async def _update_current_step(self, interview: Interview, ml_response: dict[str, Any], user_answer: str):
+    async def _update_current_step(
+        self, interview: Interview, ml_response: dict[str, Any], user_answer: str
+    ):
         """Обновляет текущий шаг интервью результатами ответа пользователя."""
         current_step = next(
             (s for s in interview.steps if s.status == InterviewStepStatus.IN_PROGRESS),
-            None
+            None,
         )
-        
+
         if current_step:
             current_step.status = InterviewStepStatus.COMPLETED
             current_step.user_answer = ml_response.get("user_answer", user_answer)
@@ -418,7 +427,7 @@ class InterviewService(BaseDbModelService[Interview]):
         self,
         interview_id: UUID,
         audio_file: UploadFile,
-    ) -> Interview:
+    ) -> str:
         allowed_mime_types = [
             "audio/webm",
             "audio/mpeg",
@@ -467,13 +476,7 @@ class InterviewService(BaseDbModelService[Interview]):
                 "Не удалось распознать речь в аудио. Попробуйте записать еще раз."
             )
 
-        message = ChatMessage(
-            interview_id=interview_id,
-            sender=MessageSender.USER,
-            text=transcribed_text,
-        )
-        self.session.add(message)
-        await self.session.flush()
-
-        await self.session.commit()
-        return await self.find_interview_by_id(interview_id, None)
+        # Возвращаем только текст транскрипции.
+        # Создание сообщения пользователя и запрос к ML выполняются на фронтенде
+        # через обычный текстовый эндпоинт.
+        return transcribed_text

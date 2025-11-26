@@ -121,7 +121,7 @@ class InterviewService {
   }: {
     interviewId: string;
     audioBlob: Blob;
-  }): Promise<Interview> {
+  }): Promise<{ text: string }> {
     try {
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.webm");
@@ -131,7 +131,7 @@ class InterviewService {
           body: formData,
           timeout: 120000,
         })
-        .json<Interview>();
+        .json<{ text: string }>();
     } catch (error) {
       throw new Error(
         error instanceof Error

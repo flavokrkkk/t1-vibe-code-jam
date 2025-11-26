@@ -3,6 +3,7 @@ export type ChatMessage = {
   sender: "USER" | "AI";
   text: string;
   created_at: string;
+  isTyping?: boolean;
 };
 
 export interface OllamaGenerateResponse {

@@ -92,5 +92,13 @@ async def handle_audio_message(
     interview_id: UUID,
     interview_service: Annotated[InterviewService, Depends(get_interview_service)],
     audio: UploadFile = File(...),
-) -> InterviewSchema:
-    return await interview_service.handle_audio_message(interview_id, audio)
+) -> dict[str, str]:
+    """
+    Обработка аудио-сообщения. Возвращает только расшифрованный текст.
+    Ответ:
+    {
+        "text": "<распознанный текст>"
+    }
+    """
+    text = await interview_service.handle_audio_message(interview_id, audio)
+    return {"text": text}

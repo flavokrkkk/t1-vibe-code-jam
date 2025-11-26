@@ -6,6 +6,7 @@ import { INTERVIEW_DETAIL_QUERY } from "../lib/queryKeys";
 interface SendChatMessageArgs {
   interviewId: string;
   text: string;
+  skipOptimistic?: boolean;
 }
 
 export const useInterviewMessage = () => {
@@ -20,6 +21,10 @@ export const useInterviewMessage = () => {
       await queryClient.cancelQueries({ queryKey });
 
       const previousInterview = queryClient.getQueryData<Interview>(queryKey);
+
+      if (variables.skipOptimistic) {
+        return { previousInterview };
+      }
 
       queryClient.setQueryData<Interview>(queryKey, (old) => {
         if (!old) return old;
