@@ -72,7 +72,7 @@ export const InterviewCreateForm = () => {
           вопросов. После этого начнется собеседование. Удачи!
         </p>
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="text-left">
               <label
                 htmlFor="jobRoleDescription"
