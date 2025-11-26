@@ -14,6 +14,7 @@ import { Button } from "@/shared/ui/button/button";
 import InterviewReport from "./interviewReport";
 import { motion } from "framer-motion";
 import { TypingIndicator } from "./typingIndicator";
+import { Image } from "@/shared/ui/image/image";
 import {
   useCurrentCodeTask,
   useInterviewCompleted,
@@ -199,13 +200,53 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
                 "flex-grow overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar w-full items-center"
               )}
             >
-              <div className="flex flex-col max-w-[800px] w-full min-w-0 p-2 px-4">
+              <div
+                className={cn(
+                  "flex flex-col max-w-[844px] w-full min-w-0 py-2 px-4",
+                  isCurrentStepCodeTask && "xl:px-10"
+                )}
+              >
                 {initialInterview.chat_messages.map((msg) => (
                   <ChatMessageBubble key={msg.id} message={msg} />
                 ))}
                 {shouldShowTypingIndicator && (
-                  <div className="bg-white text-zinc-700 self-start rounded-3xl rounded-bl-none border border-blue-400/20 p-4 my-2">
-                    <TypingIndicator />
+                  <div className="flex gap-4 my-2 justify-start py-4">
+                    <div className="flex-shrink-0">
+                      <Image
+                        src="/images/Avatar.png"
+                        alt="AI Assistant"
+                        className="h-8 w-8 rounded-full"
+                      />
+                    </div>
+                    <div
+                      className={cn(
+                        "max-w-[85%] min-w-0 rounded-3xl break-words flex flex-col",
+                        "bg-white text-zinc-700 self-start rounded-bl-none"
+                      )}
+                      style={{
+                        overflowWrap: "break-word",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      <div className="mb-2">
+                        <span
+                          className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium border"
+                          style={{
+                            borderColor: "#8b5cf6",
+                            backgroundColor: "#8b5cf620",
+                            color: "#8b5cf6",
+                          }}
+                        >
+                          Интервьюер
+                        </span>
+                      </div>
+                      <div
+                        className="break-words"
+                        style={{ overflowWrap: "break-word" }}
+                      >
+                        <TypingIndicator />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -213,6 +254,7 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
 
             <ChatInput
               interviewId={initialInterview.id}
+              isCurrentStepCodeTask={isCurrentStepCodeTask}
               onSendMessage={handleSendMessage}
               isLoading={isAILoading}
             />
@@ -230,6 +272,9 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
             currentTestResults={currentTestResults}
             onCodeChange={handleCodeChange}
             onRunTests={handleRunTests}
+            sourceCode={currentCode}
+            interviewId={initialInterview.id}
+            stepId={currentStep?.id ?? ""}
           />
         </div>
       )}

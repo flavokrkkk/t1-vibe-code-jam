@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useGetAllInterview } from "@/entities/interview/hooks/useInterview";
 import {
   InterviewStatus,
@@ -19,6 +20,7 @@ import {
 import { TagChip } from "@/shared/ui/tag/ui/badgeChip";
 import { Button } from "@/shared/ui/button/button";
 import { Image } from "@/shared/ui/image/image";
+import { ERouteNames } from "@/shared/lib/routeVariables";
 
 const statusConfig = {
   [InterviewStatus.PENDING]: {
@@ -46,6 +48,7 @@ const statusConfig = {
 type TabType = "my" | "shared";
 
 const InterviewHistoryPage = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("my");
   const { data: interviews = [], isLoading } = useGetAllInterview();
   const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
@@ -59,9 +62,17 @@ const InterviewHistoryPage = () => {
     const shared: InterviewListItem[] = [];
 
     interviews.forEach((interview) => {
-      if (interview.user_id === currentUser.id) {
+      // "Мои интервью" - интервью, где пользователь является участником
+      const isMyInterview = interview.user_id === currentUser.id;
+
+      // "Интервью по моей ссылке" - интервью, созданные пользователем, но проходимые другими
+      const isSharedInterview =
+        interview.creator_id === currentUser.id &&
+        interview.user_id !== currentUser.id;
+
+      if (isMyInterview) {
         my.push(interview);
-      } else if (interview.creator_id === currentUser.id) {
+      } else if (isSharedInterview) {
         shared.push(interview);
       }
     });
@@ -113,10 +124,8 @@ const InterviewHistoryPage = () => {
           </div>
         </div>
 
-        {/* Табы */}
         <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
           <div className="relative flex">
-            {/* Ползунок */}
             <motion.div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl"
               initial={false}
@@ -130,8 +139,6 @@ const InterviewHistoryPage = () => {
                 damping: 30,
               }}
             />
-
-            {/* Кнопки табов */}
             <button
               type="button"
               onClick={() => setActiveTab("my")}
@@ -176,7 +183,6 @@ const InterviewHistoryPage = () => {
           </div>
         </div>
 
-        {/* Контент табов */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -186,9 +192,12 @@ const InterviewHistoryPage = () => {
             transition={{ duration: 0.3 }}
           >
             {currentInterviews.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
+              <div className="bg-white rounded-4xl p-12 text-center">
                 <div className="bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                  <Briefcase className="w-10 h-10 text-gray-400" />
+                  <Image
+                    src="/images/D_BenefitIcon_48x48_291024-min.webp"
+                    alt="interview-icon"
+                  />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {activeTab === "my"
@@ -211,6 +220,29 @@ const InterviewHistoryPage = () => {
                     (interview.status === InterviewStatus.COMPLETED ? 1 : 0);
                   const progress =
                     totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+
+                  const isMyInterview =
+                    currentUser && interview.user_id === currentUser.id;
+                  const isSharedInterview =
+                    currentUser &&
+                    interview.creator_id === currentUser.id &&
+                    interview.user_id !== currentUser.id;
+
+                  const isCompleted =
+                    interview.status === InterviewStatus.COMPLETED;
+
+                  const shouldShowButton =
+                    isMyInterview || (isSharedInterview && isCompleted);
+
+                  const buttonText = isCompleted ? "Посмотреть" : "Продолжить";
+
+                  const handleButtonClick = () => {
+                    if (isMyInterview && !isCompleted) {
+                      navigate(
+                        `/${ERouteNames.DASHBOARD_ROUTE}/interview/${interview.id}`
+                      );
+                    }
+                  };
 
                   return (
                     <div
@@ -285,15 +317,16 @@ const InterviewHistoryPage = () => {
                             {statusConfig[interview.status].label}
                           </TagChip>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="bg-blue-50 text-blue-600 hover:text-blue-600 transition-all cursor-pointer"
-                          >
-                            {interview.status === InterviewStatus.COMPLETED
-                              ? "Посмотреть"
-                              : "Продолжить"}
-                          </Button>
+                          {shouldShowButton && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="bg-blue-50 text-blue-600 hover:text-blue-600 transition-all cursor-pointer"
+                              onClick={handleButtonClick}
+                            >
+                              {buttonText}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

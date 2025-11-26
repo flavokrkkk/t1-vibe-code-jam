@@ -50,10 +50,13 @@ services:
       SCIBOX_API_KEY: sk-9KZTGbeiILvRQ5g_Jc2lRQ
       SCIBOX_BASE_URL: https://llm.t1v.scibox.tech/v1
       ML_API_URL: http://ml-service:8080
+      JUDGE0_API_URL: http://judge0-server:2358
     depends_on:
       db: 
         condition: service_healthy
       ml-service:
+        condition: service_started
+      judge0-server:
         condition: service_started
     networks:
       - app-network
@@ -61,7 +64,7 @@ services:
       - "8000:8000"
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn main:app --host 0.0.0.0 --port 8000"
+             uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 300 --timeout-graceful-shutdown 30"
 
   ml-service:
     build:
@@ -76,9 +79,89 @@ services:
     networks:
       - app-network
 
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    container_name: judge0-server
+    restart: always
+    privileged: true
+    ports:
+      - "2358:2358"
+    environment:
+      - AUTH_DISABLE_USERNAME_AND_PASSWORD=true
+      - JUDGE0_WORKERS=1
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://judge0-redis:6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_URL=postgresql://judge0:judge0@judge0-db:5432/judge0
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+    depends_on:
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_started
+    networks:
+      - app-network
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: judge0-workers
+    restart: always
+    command: ["./scripts/workers"]
+    environment:
+      - AUTH_DISABLE_USERNAME_AND_PASSWORD=true
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://judge0-redis:6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_URL=postgresql://judge0:judge0@judge0-db:5432/judge0
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      - app-network
+    privileged: true
+
+  judge0-db:
+    image: postgres:13
+    container_name: judge0-db
+    restart: always
+    environment:
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+      - POSTGRES_DB=judge0
+    volumes:
+      - judge0-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  judge0-redis:
+    image: redis:6.0
+    container_name: judge0-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - judge0-redis-data:/data
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   postgres_data:
+  judge0-postgres-data:
+  judge0-redis-data:

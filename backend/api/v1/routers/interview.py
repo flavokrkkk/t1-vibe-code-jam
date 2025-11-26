@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies import get_current_user_dependency, get_interview_service
-from core.dto.interview import ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema
+from core.dto.interview import BanForCheatingSchema, ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema
 from core.dto.user import BaseUserSchema
 from infrastructure.database.models.models import MessageSender
 from utils.error_extra import error_response
@@ -72,6 +74,50 @@ async def handle_chat_message(
 
 
 @router.post(
+    "/{interview_id}/message/stream",
+    responses={**error_response(BadRequestException), **error_response(NotFoundException)}
+)
+async def handle_chat_message_stream(
+    interview_id: UUID,
+    data: ChatMessageSchema,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+):
+    """SSE стриминг ответов AI - текст появляется по мере генерации"""
+    async def generate_sse():
+        try:
+            # Отправляем начальное событие для установки соединения
+            yield f": ping\n\n"
+            
+            # Используем новый метод с SSE стримингом
+            async for event in interview_service.handle_chat_message_stream(
+                interview_id, 
+                MessageSender.USER, 
+                data.text
+            ):
+                # Добавляем явный flush через двойной перенос строки
+                event_data = json.dumps(event, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+                
+        except BadRequestException as e:
+            logger.error(f"Ошибка валидации при стриминге: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"Ошибка при стриминге сообщения: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Внутренняя ошибка сервера'}, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
+
+
+@router.post(
     "/{interview_id}/steps/{step_id}/code",
     responses={**error_response(NotFoundException), **error_response(BadRequestException)}
 )
@@ -82,6 +128,18 @@ async def submit_code(
     interview_service: Annotated[InterviewService, Depends(get_interview_service)],
 ) -> InterviewSchema:
     return await interview_service.submit_code(interview_id, step_id, data.user_code)
+
+
+@router.post(
+    "/{interview_id}/steps/{step_id}/skip",
+    responses={**error_response(NotFoundException), **error_response(BadRequestException)}
+)
+async def skip_step(
+    interview_id: UUID,
+    step_id: UUID,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    return await interview_service.skip_step(interview_id, step_id)
 
 
 @router.post(
@@ -102,3 +160,23 @@ async def handle_audio_message(
     """
     text = await interview_service.handle_audio_message(interview_id, audio)
     return {"text": text}
+
+
+@router.post(
+    "/{interview_id}/ban",
+    responses={**error_response(BadRequestException), **error_response(NotFoundException)}
+)
+async def ban_for_cheating(
+    interview_id: UUID,
+    data: BanForCheatingSchema,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    """
+    Банит интервью за читинг.
+    
+    Request body:
+    {
+        "reasons": ["Использование AI", "Копирование кода"]
+    }
+    """
+    return await interview_service.ban_for_cheating(interview_id, data.reasons)
