@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
+from openai import InternalServerError, APITimeoutError, APIError
 
 from interview_agent import InterviewAgent
 
@@ -26,6 +27,18 @@ class StartInterviewRequest(BaseModel):
     session_id: str | None = Field(None, description="ID сессии (опционально, для синхронизации с бэкендом)")
 
 
+class NextStepDialog(BaseModel):
+    """Следующий шаг - диалог."""
+    type: str = Field("DIALOG", description="Тип шага")
+    question_text: str = Field(..., description="Текст вопроса")
+
+
+class NextStepCodeTask(BaseModel):
+    """Следующий шаг - кодовая задача."""
+    type: str = Field("CODE_TASK", description="Тип шага")
+    code_task: dict[str, str] = Field(..., description="Параметры задачи: topic, difficulty, language")
+
+
 class InterviewStepResponse(BaseModel):
     """Ответ с шагом интервью."""
     
@@ -36,6 +49,7 @@ class InterviewStepResponse(BaseModel):
     ai_feedback: str | None = Field(None, description="Обратная связь от ИИ")
     user_answer: str | None = Field(None, description="Ответ пользователя")
     feedback: str | None = Field(None, description="Краткая обратная связь")
+    next_step: dict[str, Any] | None = Field(None, description="Следующий шаг интервью")
 
 
 class MessageRequest(BaseModel):
@@ -131,4 +145,83 @@ async def delete_session(session_id: str) -> dict[str, str]:
 async def health_check() -> dict[str, str]:
     """Проверка здоровья сервиса."""
     return {"status": "ok"}
+
+
+class GenerateTaskRequest(BaseModel):
+    """Запрос на генерацию задачи."""
+    topic: str = Field(..., min_length=1, max_length=200, description="Тема задачи")
+    difficulty: Literal["easy", "medium", "hard"] = Field(..., description="Сложность: easy, medium, hard")
+    language: str = Field(..., min_length=1, max_length=50, description="Язык программирования")
+
+
+class GenerateTaskResponse(BaseModel):
+    """Ответ с полной задачей."""
+    description: str = Field(..., description="Описание задачи")
+    initial_code: str = Field(..., description="Начальный код")
+    test_cases: list[dict[str, str]] = Field(..., description="Тест-кейсы (до 3)")
+    topic: str = Field(..., description="Тема задачи")
+    difficulty: str = Field(..., description="Сложность")
+    language: str = Field(..., description="Язык программирования")
+
+
+@app.post("/generate_task", response_model=GenerateTaskResponse, status_code=status.HTTP_200_OK)
+async def generate_task(request: GenerateTaskRequest) -> GenerateTaskResponse:
+    """Генерация полной задачи на код по параметрам."""
+    try:
+        agent = InterviewAgent()
+        task = agent.generate_code_task(
+            topic=request.topic,
+            difficulty=request.difficulty,
+            language=request.language
+        )
+        return GenerateTaskResponse(**task)
+    except Exception as e:
+        error_msg = str(e)
+        error_type = type(e).__name__
+        
+        cause = getattr(e, '__cause__', None)
+        cause_type = type(cause).__name__ if cause else None
+        cause_msg = str(cause) if cause else ""
+        
+        is_timeout = (
+            "504" in error_msg or 
+            "Gateway Time-out" in error_msg or 
+            "Gateway Timeout" in error_msg or
+            "timeout" in error_msg.lower() or
+            "504" in cause_msg or
+            "Gateway Time-out" in cause_msg or
+            "Gateway Timeout" in cause_msg or
+            "timeout" in cause_msg.lower() or
+            isinstance(e, APITimeoutError) or
+            (cause and isinstance(cause, APITimeoutError))
+        )
+        
+        is_api_error = (
+            isinstance(e, (InternalServerError, APIError)) or
+            "InternalServerError" in error_type or
+            "APIError" in error_type or
+            (cause and isinstance(cause, (InternalServerError, APIError))) or
+            "InternalServerError" in (cause_type or "") or
+            "APIError" in (cause_type or "")
+        )
+        
+        if is_timeout:
+            logger.error(f"Таймаут при генерации задачи: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Превышено время ожидания ответа от сервиса генерации. Попробуйте позже."
+            )
+        
+        if is_api_error:
+            logger.error(f"Ошибка API при генерации задачи: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Сервис генерации временно недоступен. Попробуйте позже."
+            )
+        
+        logger.error(f"Ошибка при генерации задачи: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при генерации задачи: {str(e)}"
+        )
 

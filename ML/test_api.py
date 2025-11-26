@@ -45,6 +45,9 @@ def test_start_interview():
     assert data["step"]["type"] == "DIALOG"
     assert data["step"]["status"] == "IN_PROGRESS"
     assert data["step"]["question_text"] is not None
+    assert "next_step" in data["step"]
+    assert data["step"]["next_step"] is not None
+    assert data["step"]["next_step"]["type"] == "DIALOG"
 
 
 def test_start_interview_validation():
@@ -76,6 +79,7 @@ def test_process_message():
     assert data["type"] == "DIALOG"
     assert data["user_answer"] == "Я работал с Python 3 года, использовал FastAPI для создания REST API."
     assert data["question_text"] is not None
+    assert "next_step" in data
 
 
 def test_process_message_invalid_session():
@@ -175,8 +179,73 @@ def test_interview_with_completion():
         )
         assert response.status_code == 200
         data = response.json()
+        assert "next_step" in data
         
         if data["status"] == "COMPLETED":
             assert data["ai_feedback"] is not None
             break
+
+
+def test_generate_task():
+    """Тест генерации задачи."""
+    response = client.post(
+        "/generate_task",
+        json={
+            "topic": "AsyncIO",
+            "difficulty": "medium",
+            "language": "python"
+        }
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "description" in data
+    assert "initial_code" in data
+    assert "test_cases" in data
+    assert isinstance(data["test_cases"], list)
+    assert len(data["test_cases"]) <= 3
+    assert data["topic"] == "AsyncIO"
+    assert data["difficulty"] == "medium"
+    assert data["language"] == "python"
+    for test_case in data["test_cases"]:
+        assert "input" in test_case
+        assert "output" in test_case
+
+
+def test_generate_task_validation():
+    """Тест валидации запроса генерации задачи."""
+    response = client.post(
+        "/generate_task",
+        json={
+            "topic": "",
+            "difficulty": "invalid",
+            "language": ""
+        }
+    )
+    assert response.status_code == 422
+
+
+def test_process_message_with_code():
+    """Тест обработки сообщения с кодом."""
+    session_id = _create_interview_session()
+    
+    code_submission = """Task Description: Напишите async функцию для загрузки данных
+Topic: AsyncIO
+User Code: async def load_data(): return "data"
+System Execution Result: 2/3 tests passed."""
+    
+    response = client.post(
+        "/message",
+        json={
+            "session_id": session_id,
+            "user_answer": code_submission
+        }
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["type"] in ["DIALOG", "CODE_TASK"]
+    assert "next_step" in data
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
 
