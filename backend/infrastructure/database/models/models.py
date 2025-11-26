@@ -25,6 +25,7 @@ class InterviewStatus(str, enum.Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    BANNED = "BANNED"  # Забанен за читинг
 
 
 class InterviewStepType(str, enum.Enum):
@@ -124,6 +125,8 @@ class Interview(Base):
         nullable=False,
     )
     pending_next_step: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ban_reasons: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(
         "User",

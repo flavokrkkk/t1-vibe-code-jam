@@ -825,3 +825,29 @@ class InterviewService(BaseDbModelService[Interview]):
         await self.session.flush()
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
+
+    async def ban_for_cheating(
+        self,
+        interview_id: UUID,
+        reasons: list[str],
+    ) -> Interview:
+        """Банит интервью за читинг с указанием причин."""
+        interview = await self.find_interview_by_id(interview_id, None)
+        
+        if interview.status == InterviewStatus.BANNED:
+            raise BadRequestException("Интервью уже забанено.")
+        
+        # Устанавливаем статус BANNED
+        interview.status = InterviewStatus.BANNED
+        interview.ban_reasons = reasons
+        from datetime import datetime, timezone
+        interview.banned_at = datetime.now(timezone.utc)
+        
+        # Завершаем все активные шаги
+        for step in interview.steps:
+            if step.status == InterviewStepStatus.IN_PROGRESS:
+                step.status = InterviewStepStatus.COMPLETED
+                step.feedback = "Интервью завершено: обнаружен читинг."
+        
+        await self.session.commit()
+        return await self.find_interview_by_id(interview_id, None)

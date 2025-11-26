@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies import get_current_user_dependency, get_interview_service
-from core.dto.interview import ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema
+from core.dto.interview import BanForCheatingSchema, ChatMessageSchema, CreateInterviewSchema, InterviewSchema, SubmitCodeSchema
 from core.dto.user import BaseUserSchema
 from infrastructure.database.models.models import MessageSender
 from utils.error_extra import error_response
@@ -160,3 +160,23 @@ async def handle_audio_message(
     """
     text = await interview_service.handle_audio_message(interview_id, audio)
     return {"text": text}
+
+
+@router.post(
+    "/{interview_id}/ban",
+    responses={**error_response(BadRequestException), **error_response(NotFoundException)}
+)
+async def ban_for_cheating(
+    interview_id: UUID,
+    data: BanForCheatingSchema,
+    interview_service: Annotated[InterviewService, Depends(get_interview_service)],
+) -> InterviewSchema:
+    """
+    Банит интервью за читинг.
+    
+    Request body:
+    {
+        "reasons": ["Использование AI", "Копирование кода"]
+    }
+    """
+    return await interview_service.ban_for_cheating(interview_id, data.reasons)

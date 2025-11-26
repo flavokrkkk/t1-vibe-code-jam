@@ -70,6 +70,32 @@ class SubmitCodeSchema(BaseModel):
     )
 
 
+class BanForCheatingSchema(BaseModel):
+    """Схема бана за читинг."""
+
+    reasons: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Причины бана (от 1 до 10)",
+    )
+
+    @field_validator("reasons")
+    @classmethod
+    def validate_reasons(cls, v: list[str]) -> list[str]:
+        """Валидация причин бана."""
+        if not v:
+            raise ValueError("Необходимо указать хотя бы одну причину бана")
+        
+        for reason in v:
+            if not reason or not reason.strip():
+                raise ValueError("Причина бана не может быть пустой")
+            if len(reason) > 200:
+                raise ValueError("Причина бана не может быть длиннее 200 символов")
+        
+        return v
+
+
 class CodeTestResultSchema(BaseModel):
     """Схема результата теста кода."""
 
@@ -129,12 +155,11 @@ class BaseInterviewSchema(BaseModel):
     key_skills: list[str] = []
     preferences: str | None = None
     current_step_index: int
-    status: str
     total_score: int | None
     overall_feedback: str | None
-    created_at: datetime
-    updated_at: datetime
     public_token: str
+    ban_reasons: list[str] | None = None
+    banned_at: datetime | None = None
 
     @field_validator("public_token")
     @classmethod
