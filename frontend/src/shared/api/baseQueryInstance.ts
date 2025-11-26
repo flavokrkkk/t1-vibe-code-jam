@@ -7,7 +7,7 @@ import {
 } from "@/entities/token";
 import ky from "ky";
 
-const API_BASE_URL = "http://localhost:8000/api/";
+const API_BASE_URL = "http://localhost:8000/api/v1/";
 
 export const publicApi = ky.create({
   prefixUrl: API_BASE_URL,
@@ -17,7 +17,7 @@ export const publicApi = ky.create({
 
 export const authApi = ky.create({
   prefixUrl: API_BASE_URL,
-  timeout: 10000,
+  timeout: 10000, // Базовый таймаут для обычных запросов
   hooks: {
     beforeRequest: [
       (request) => {

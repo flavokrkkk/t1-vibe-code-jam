@@ -1,4 +1,3 @@
-// components/FeedbackPanel.tsx
 import { Interview } from "@/entities/interview/types/types";
 import {
   Select,
@@ -41,85 +40,92 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ interview }) => {
 
   return (
     <div className="overflow-y-auto flex custom-scrollbar w-full items-center text-gray-800 h-full">
-      <section className="min-w-1/3 max-w-1/3 border-t flex flex-col space-y-4 h-full p-4 bg-[#3d66ff] rounded-bl-lg">
-        <Select value={selectStepId} onValueChange={setSelectStepId}>
-          <SelectTrigger className="w-full cursor-pointer rounded-xl bg-white text-blue-500 border-0 text-[13px] focus:ring-1 focus:ring-blue-500 py-6 px-3">
-            <SelectValue placeholder="Выбрать роль" />
-          </SelectTrigger>
-          <SelectContent className="bg-white text-blue-700 rounded-xl border-0">
-            {interview.steps.map((step, i) => (
-              <SelectItem
-                key={step.id}
-                value={step.id}
-                className="p-3 rounded-xl cursor-pointer"
-              >
-                Вопрос {i + 1}/{interview.steps.length}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {currentStep && (
-          <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-200 flex flex-col  overflow-auto">
-            <h4 className="text-lg font-bold mb-2">
-              Шаг {1 + 1}:{" "}
-              {currentStep.type === "DIALOG"
-                ? "Диалоговый Вопрос"
-                : "Кодовая Задача"}
-            </h4>
-            {currentStep.question_text && (
-              <p className="text-gray-600 text-sm mb-2 italic">
-                Вопрос: {currentStep.question_text}
-              </p>
-            )}
-            {currentStep.user_answer && (
-              <p className="text-gray-700 text-sm mb-2">
-                Ваш ответ: {currentStep.user_answer}
-              </p>
-            )}
-            {currentStep.user_code && (
-              <div className="bg-gray-100 p-3 rounded-md text-sm font-mono my-2">
-                <h5 className="font-semibold mb-1">Ваш код:</h5>
-                <pre className="whitespace-pre-wrap break-words">
-                  {currentStep.user_code}
-                </pre>
-              </div>
-            )}
-            {currentStep.score !== null && (
-              <p className="text-md font-semibold mt-auto pt-2">
-                Оценка за шаг:{" "}
-                <span className="text-green-600">{currentStep.score}/100</span>
-              </p>
-            )}
-            {currentStep.ai_feedback && (
-              <div className="mt-2 text-sm text-gray-800 bg-blue-50 p-3 rounded-md">
-                <h5 className="font-semibold text-blue-800">Фидбэк AI:</h5>
-                <p className="whitespace-pre-wrap">{currentStep.ai_feedback}</p>
-              </div>
-            )}
-            {currentStep.code_test_results &&
-              currentStep.code_test_results.length > 0 && (
-                <div className="mt-2 text-sm">
-                  <h5 className="font-semibold">Результаты тестов:</h5>
-                  <ul className="list-disc list-inside ml-2">
-                    {currentStep.code_test_results.map((test) => (
-                      <li
-                        key={test.test_id}
-                        className={
-                          test.status === "PASSED"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {test.test_id}: {test.status}{" "}
-                        {test.details && `(${test.details})`}
-                      </li>
-                    ))}
-                  </ul>
+      <div className="min-w-1/3 max-w-1/3 h-full p-4">
+        <section className="w-full h-full border-t flex flex-col space-y-4 p-4 bg-[#3d66ff] rounded-3xl">
+          <Select value={selectStepId} onValueChange={setSelectStepId}>
+            <SelectTrigger className="w-full cursor-pointer rounded-xl bg-white text-blue-500 border-0 text-[13px] focus:ring-1 focus:ring-blue-500 py-6 px-3">
+              <SelectValue placeholder="Выбрать роль" />
+            </SelectTrigger>
+            <SelectContent className="bg-white text-blue-700 rounded-xl border-0">
+              {interview.steps.map((step, i) => (
+                <SelectItem
+                  key={step.id}
+                  value={step.id}
+                  className="p-3 rounded-xl cursor-pointer"
+                >
+                  Вопрос {i + 1}/{interview.steps.length}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {currentStep && (
+            <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-200 flex flex-col  overflow-auto">
+              <h4 className="text-lg font-bold mb-2">
+                Шаг {1 + 1}:{" "}
+                {currentStep.type === "DIALOG"
+                  ? "Диалоговый Вопрос"
+                  : "Кодовая Задача"}
+              </h4>
+              {currentStep.question_text && (
+                <p className="text-gray-600 text-sm mb-2 italic">
+                  Вопрос: {currentStep.question_text}
+                </p>
+              )}
+              {currentStep.user_answer && (
+                <p className="text-gray-700 text-sm mb-2">
+                  Ваш ответ: {currentStep.user_answer}
+                </p>
+              )}
+              {currentStep.user_code && (
+                <div className="bg-gray-100 p-3 rounded-md text-sm font-mono my-2">
+                  <h5 className="font-semibold mb-1">Ваш код:</h5>
+                  <pre className="whitespace-pre-wrap break-words">
+                    {currentStep.user_code}
+                  </pre>
                 </div>
               )}
-          </div>
-        )}
-      </section>
+              {currentStep.score !== null && (
+                <p className="text-md font-semibold mt-auto pt-2">
+                  Оценка за шаг:{" "}
+                  <span className="text-green-600">
+                    {currentStep.score}/100
+                  </span>
+                </p>
+              )}
+              {currentStep.ai_feedback && (
+                <div className="mt-2 text-sm text-gray-800 bg-blue-50 p-3 rounded-md">
+                  <h5 className="font-semibold text-blue-800">Фидбэк AI:</h5>
+                  <p className="whitespace-pre-wrap">
+                    {currentStep.ai_feedback}
+                  </p>
+                </div>
+              )}
+              {currentStep.code_test_results &&
+                currentStep.code_test_results.length > 0 && (
+                  <div className="mt-2 text-sm">
+                    <h5 className="font-semibold">Результаты тестов:</h5>
+                    <ul className="list-disc list-inside ml-2">
+                      {currentStep.code_test_results.map((test) => (
+                        <li
+                          key={test.test_id}
+                          className={
+                            test.status === "PASSED"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
+                          {test.test_id}: {test.status}{" "}
+                          {test.details && `(${test.details})`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+            </div>
+          )}
+        </section>
+      </div>
+
       <section className="w-full h-full overflow-auto p-4 space-y-4">
         <div className="bg-gradient-to-r from-blue-300 to-[#3d66ff] p-6 rounded-3xl text-white text-center">
           <h3 className="text-xl font-semibold mb-2">Общий балл</h3>

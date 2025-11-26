@@ -11,6 +11,7 @@ import { Button } from "@/shared/ui/button/button";
 import { useState } from "react";
 import { useCreateInterview } from "../hooks/useCreateInterview";
 import { SkillsInput } from "./SkillsInput";
+import { InterviewCreatedDialog } from "./interviewCreatedDialog";
 
 const questionOptions = [5, 10, 15, 20, 25, 30];
 
@@ -18,6 +19,11 @@ export const InterviewCreateForm = () => {
   const [currentAmountOfQuestions, setCurrentAmountOfQuestions] = useState(
     questionOptions[0]
   );
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [createdInterview, setCreatedInterview] = useState<{
+    id: string;
+    public_token: string;
+  } | null>(null);
 
   const form = useForm<CreateInterviewFormData>({
     resolver: zodResolver(createInterviewSchema),
@@ -32,6 +38,7 @@ export const InterviewCreateForm = () => {
   const {
     handleSubmit,
     formState: { errors },
+    reset,
   } = form;
 
   const {
@@ -39,19 +46,28 @@ export const InterviewCreateForm = () => {
     isError,
     isPending,
     error,
-  } = useCreateInterview();
+  } = useCreateInterview({
+    onSuccess: (interview) => {
+      setCreatedInterview({
+        id: interview.id,
+        public_token: interview.public_token,
+      });
+      setIsDialogOpen(true);
+      reset();
+    },
+  });
 
   const onSubmit = async (interviewData: CreateInterviewFormData) => {
     createInterviewMutation(interviewData);
   };
 
   return (
-    <div className="relative text-white flex items-center justify-center p-4">
+    <div className="relative text-white flex items-center justify-center p-4  rounded-4xl">
       <div className="relative z-10 w-full max-w-3xl rounded-3xl p-8 py-12 space-y-8 text-center overflow-hidden">
         <h1 className="text-4xl font-extrabold mb-4 text-zinc-600">
           Создайте ваше интервью
         </h1>
-        <p className="text-base text-gray-600 mx-auto mb-12">
+        <p className="text-base text-gray-600 mx-auto mb-8">
           Укажите должность, добавьте ключевые навыки, пожелания и количество
           вопросов. После этого начнется собеседование. Удачи!
         </p>
@@ -182,7 +198,7 @@ export const InterviewCreateForm = () => {
               disabled={!form.formState.isValid || isPending}
               type="submit"
               className={cn(
-                "mt-8 bg-blue-600/60 hover:bg-blue-700/60 text-white p-7 px-12 rounded-3xl cursor-pointer text-xl font-bold shadow-lg transition-all duration-200",
+                "mt-4 bg-blue-600/60 hover:bg-blue-700/60 text-white p-7 px-12 rounded-3xl cursor-pointer text-xl font-bold shadow-lg transition-all duration-200",
                 (!form.formState.isValid || isPending) &&
                   "opacity-70 cursor-not-allowed"
               )}
@@ -192,6 +208,14 @@ export const InterviewCreateForm = () => {
           </form>
         </Form>
       </div>
+      {createdInterview && (
+        <InterviewCreatedDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          interviewId={createdInterview.id}
+          publicToken={createdInterview.public_token}
+        />
+      )}
     </div>
   );
 };

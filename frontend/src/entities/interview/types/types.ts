@@ -47,16 +47,20 @@ export type InterviewStep = {
 export type Interview = {
   id: string;
   user_id: string;
+  creator_id: string;
   job_role_description: string;
   amount_of_tasks: number; // Запрошенное количество задач (вместо вопросов)
   current_step_index: number; // Индекс текущего активного шага/задачи
   status: InterviewStatus;
-  created_at: string;
-  updated_at: string;
+  created_at: string; // Формат: "2025-11-25T22:02:48.171313Z"
+  updated_at: string; // Формат: "2025-11-25T22:02:48.171313Z"
   steps: InterviewStep[]; // Массив шагов/задач интервью
   chat_messages: ChatMessage[]; // Все сообщения чата (ИИ + пользователь)
   total_score: number | null;
   overall_feedback: string | null;
+  key_skills: string[]; // Массив ключевых навыков
+  preferences: string; // Предпочтения пользователя
+  public_token: string; // Публичный токен для доступа к интервью (URL)
 };
 
 export interface TestCase {
@@ -66,3 +70,11 @@ export interface TestCase {
 }
 
 export type CodeTestResultStatus = "passed" | "failed" | "pending" | "error";
+
+// Тип для элемента списка интервью (без полных данных)
+export type InterviewListItem = Omit<Interview, "chat_messages" | "steps"> & {
+  chat_messages_count?: number;
+  steps_count?: number;
+  chat_messages?: ChatMessage[]; // Опционально, может быть undefined
+  steps?: InterviewStep[]; // Опционально, может быть undefined
+};

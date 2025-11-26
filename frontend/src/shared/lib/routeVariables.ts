@@ -8,4 +8,5 @@ export const enum ERouteNames {
   INTERVIEW_DETAIL_ROUTE = "interview/:interviewId",
   PROFILE_ROUTE = "profile",
   INTERVIEW_HISTORY_ROUTE = "interview-history",
+  CLAIM_INTERVIEW_ROUTE = "claim",
 }

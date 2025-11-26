@@ -1,3 +1,4 @@
 export enum EInterviewEndpoints {
-  INTERVIEWS = "interviews",
+  INTERVIEWS_GET = "user/interviews",
+  INTERVIEWS_CREATE = "interviews",
 }

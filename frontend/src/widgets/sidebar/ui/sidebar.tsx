@@ -54,7 +54,7 @@ export const Sidebar = () => {
                 isExpanded ? "opacity-100 w-auto ml-3" : "opacity-0 w-0 ml-0"
               )}
             >
-              AiCource
+              T1 Course
             </span>
           )}
         </NavLink>

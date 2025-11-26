@@ -136,7 +136,9 @@ const InterviewHistoryPage = () => {
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-blue-100 rounded-2xl p-4 text-center">
                       <p className="text-2xl font-bold text-blue-600">
-                        {interview.chat_messages.length}
+                        {interview.chat_messages?.length ??
+                          interview.chat_messages_count ??
+                          0}
                       </p>
                       <p className="text-xs text-gray-600">Сообщений</p>
                     </div>

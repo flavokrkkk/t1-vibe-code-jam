@@ -14,6 +14,9 @@ const ProfilePage = lazy(() => import("@/pages/(main)/profilePage"));
 const InterviewHistoryPage = lazy(
   () => import("@/pages/(main)/interviewHistoryPage")
 );
+const ClaimInterviewPage = lazy(
+  () => import("@/pages/(main)/claimInterviewPage")
+);
 
 const RegisterPage = lazy(() => import("@/pages/(auth)/registerPage"));
 const LoginPage = lazy(() => import("@/pages/(auth)/loginPage"));
@@ -53,6 +56,10 @@ export const routes = createBrowserRouter([
                 {
                   path: ERouteNames.INTERVIEW_HISTORY_ROUTE,
                   element: <InterviewHistoryPage />,
+                },
+                {
+                  path: ERouteNames.CLAIM_INTERVIEW_ROUTE,
+                  element: <ClaimInterviewPage />,
                 },
               ],
             },

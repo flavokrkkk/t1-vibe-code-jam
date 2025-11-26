@@ -7,11 +7,12 @@ import {
 } from "../lib/queryKeys";
 import { Interview } from "../types/types";
 import { CreateInterviewFormData } from "../lib/schemes/createInterviewSchema";
-import { useNavigate } from "react-router-dom";
-import { ERouteNames } from "@/shared/lib/routeVariables";
 
-export const useCreateInterview = () => {
-  const navigate = useNavigate();
+interface UseCreateInterviewOptions {
+  onSuccess?: (interview: Interview) => void;
+}
+
+export const useCreateInterview = (options?: UseCreateInterviewOptions) => {
   const queryClient = useQueryClient();
 
   return useMutation<Interview, Error, CreateInterviewFormData>({
@@ -33,7 +34,7 @@ export const useCreateInterview = () => {
         newInterview
       );
 
-      navigate(`/${ERouteNames.DASHBOARD_ROUTE}/interview/${newInterview.id}`);
+      options?.onSuccess?.(newInterview);
     },
   });
 };

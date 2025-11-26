@@ -1,5 +1,5 @@
 import { authApi } from "@/shared/api/baseQueryInstance";
-import { Interview } from "../types/types";
+import { Interview, InterviewListItem } from "../types/types";
 import { ErrorMessages } from "@/shared/api/queryError";
 
 import { EInterviewEndpoints } from "../lib/endpoints";
@@ -11,20 +11,42 @@ class InterviewService {
   ): Promise<Interview> {
     try {
       return await authApi
-        .post(EInterviewEndpoints.INTERVIEWS, {
+        .extend({
+          timeout: 90000,
+        })
+        .post(EInterviewEndpoints.INTERVIEWS_CREATE, {
           json: createInterviewDto,
         })
         .json<Interview>();
     } catch (error) {
+      if (error instanceof Error) {
+        if (
+          error.name === "TimeoutError" ||
+          error.message.includes("timeout")
+        ) {
+          throw new Error(
+            "Превышено время ожидания. Создание интервью занимает больше времени из-за генерации задач. Попробуйте еще раз."
+          );
+        }
+        if (
+          error.message.includes("canceled") ||
+          error.message.includes("aborted")
+        ) {
+          throw new Error(
+            "Запрос был отменен. Убедитесь, что ML сервис запущен и доступен."
+          );
+        }
+      }
+      console.error("Error creating interview:", error);
       throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
     }
   }
 
-  public async getAllInterviews(): Promise<Interview[]> {
+  public async getAllInterviews(): Promise<InterviewListItem[]> {
     try {
       return await authApi
-        .get(EInterviewEndpoints.INTERVIEWS)
-        .json<Interview[]>();
+        .get(EInterviewEndpoints.INTERVIEWS_GET)
+        .json<InterviewListItem[]>();
     } catch (error) {
       throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
     }
@@ -37,7 +59,7 @@ class InterviewService {
   }): Promise<Interview> {
     try {
       return await authApi
-        .get(`${EInterviewEndpoints.INTERVIEWS}/${interviewId}`)
+        .get(`${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}`)
         .json<Interview>();
     } catch (error) {
       throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
@@ -55,8 +77,11 @@ class InterviewService {
   }): Promise<Interview> {
     try {
       return await authApi
+        .extend({
+          timeout: 90000,
+        })
         .post(
-          `${EInterviewEndpoints.INTERVIEWS}/${interviewId}/steps/${stepId}/code`,
+          `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/steps/${stepId}/code`,
           {
             json: { user_code: userCode },
           }
@@ -80,9 +105,15 @@ class InterviewService {
   }): Promise<Interview> {
     try {
       return await authApi
-        .post(`${EInterviewEndpoints.INTERVIEWS}/${interviewId}/message`, {
-          json: { text },
+        .extend({
+          timeout: 90000,
         })
+        .post(
+          `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/message`,
+          {
+            json: { text },
+          }
+        )
         .json<Interview>();
     } catch (error) {
       throw new Error(
@@ -105,9 +136,29 @@ class InterviewService {
       formData.append("audio", audioBlob, "audio.webm");
 
       return await authApi
-        .post(`${EInterviewEndpoints.INTERVIEWS}/${interviewId}/audio`, {
+        .post(`${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/audio`, {
           body: formData,
           timeout: 120000,
+        })
+        .json<Interview>();
+    } catch (error) {
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : ErrorMessages.REQUEST_PREPARATION_ERROR
+      );
+    }
+  }
+
+  public async claimInterview({
+    publicToken,
+  }: {
+    publicToken: string;
+  }): Promise<Interview> {
+    try {
+      return await authApi
+        .get(`${EInterviewEndpoints.INTERVIEWS_CREATE}/claim/`, {
+          searchParams: { public_token: publicToken },
         })
         .json<Interview>();
     } catch (error) {
@@ -127,4 +178,5 @@ export const {
   submitCode,
   sendChatMessage,
   sendAudioMessage,
+  claimInterview,
 } = new InterviewService();

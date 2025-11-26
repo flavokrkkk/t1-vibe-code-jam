@@ -16,6 +16,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     ? "bg-blue-500 transition-colors ease-in-out text-white self-end rounded-br-none"
     : "bg-white text-zinc-700 self-start rounded-bl-none border border-blue-400/20";
 
+  const formattedTime = React.useMemo(() => {
+    const dateTime = DateTime.fromISO(message.timestamp);
+    return dateTime.isValid ? dateTime.toFormat("HH:mm") : "";
+  }, [message.timestamp]);
+
   return (
     <div
       className={cn(
@@ -57,7 +62,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </ReactMarkdown>
       </div>
       <div className="text-xs text-right opacity-75 mt-1">
-        {DateTime.fromISO(message.timestamp).toFormat("HH:mm")}
+        {formattedTime}
       </div>
     </div>
   );
