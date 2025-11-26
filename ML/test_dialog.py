@@ -4,7 +4,7 @@
 import requests
 import json
 
-API_URL = "http://localhost:8000"
+API_URL = "http://localhost:8080"
 
 
 def start_interview():
@@ -27,7 +27,7 @@ def start_interview():
     print("-" * 60)
     
     response = requests.post(
-        f"{API_URL}/start",
+        f"{API_URL}/start/stream",
         json={
             "job_title": job_title,
             "required_skills": required_skills,
@@ -65,7 +65,7 @@ def continue_dialog(session_id):
             break
         
         response = requests.post(
-            f"{API_URL}/message",
+            f"{API_URL}/message/stream",
             json={
                 "session_id": session_id,
                 "user_answer": user_answer

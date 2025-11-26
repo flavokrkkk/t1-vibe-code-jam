@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from openai import InternalServerError, APITimeoutError, APIError
 
@@ -113,6 +115,243 @@ async def process_message(request: MessageRequest) -> InterviewStepResponse:
     try:
         agent = agents[request.session_id]
         step = agent.process_answer(request.user_answer)
+        
+        if step is None:
+            raise RuntimeError("Агент вернул None вместо шага интервью")
+        
+        if step.get("status") == "COMPLETED" and agent.is_interview_complete():
+            final_feedback = agent.generate_feedback()
+            step["ai_feedback"] = final_feedback
+            step["feedback"] = final_feedback
+        
+        return InterviewStepResponse(**step)
+    except Exception as e:
+        logger.error(f"Ошибка при обработке сообщения: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обработке сообщения: {str(e)}"
+        )
+
+
+@app.post("/start/stream", response_model=StartInterviewResponse, status_code=status.HTTP_200_OK)
+async def start_interview_stream(request: StartInterviewRequest) -> StartInterviewResponse:
+    """Начало интервью с использованием стриминга внутри."""
+    try:
+        agent = InterviewAgent()
+        session_id = request.session_id or str(uuid4())
+        
+        if session_id in agents:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Сессия с ID {session_id} уже существует"
+            )
+        
+        full_response = ""
+        for chunk in agent.start_interview_stream(
+            job_title=request.job_title,
+            required_skills=request.required_skills,
+            amount_of_tasks=request.amount_of_tasks,
+        ):
+            full_response += chunk
+        
+        if not full_response:
+            raise RuntimeError("Пустой ответ от модели")
+        
+        parsed = agent._parse_ai_response(full_response)
+        
+        if parsed.get("type") == "new_step":
+            next_step = parsed.get("nextStep", {})
+            next_step_type = next_step.get("type", "DIALOG")
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            
+            if answer_text and next_question_text:
+                question_text = f"{answer_text} {next_question_text}"
+            else:
+                question_text = answer_text or next_question_text
+            
+            next_step_data = None
+            if next_step_type == "CODE_TASK":
+                code_task = next_step.get("codeTask", {})
+                next_step_data = {
+                    "type": "CODE_TASK",
+                    "code_task": {
+                        "topic": code_task.get("topic", "Python"),
+                        "difficulty": code_task.get("difficulty", "medium"),
+                        "language": code_task.get("language", "python")
+                    }
+                }
+            else:
+                next_step_data = {
+                    "type": "DIALOG",
+                    "question_text": next_question_text or answer_text
+                }
+            
+            first_step = {
+                "type": "DIALOG",
+                "question_text": question_text,
+                "status": "IN_PROGRESS",
+                "score": parsed.get("score"),
+                "ai_feedback": answer_text,
+                "user_answer": None,
+                "feedback": parsed.get("feedback"),
+                "next_step": next_step_data
+            }
+        else:
+            answer_text = parsed.get("answerText", full_response[:300])
+            first_step = {
+                "type": "DIALOG",
+                "question_text": answer_text,
+                "status": "IN_PROGRESS",
+                "score": None,
+                "ai_feedback": answer_text,
+                "user_answer": None,
+                "feedback": None,
+                "next_step": {
+                    "type": "DIALOG",
+                    "question_text": answer_text
+                }
+            }
+        
+        agents[session_id] = agent
+        
+        return StartInterviewResponse(
+            session_id=session_id,
+            step=InterviewStepResponse(**first_step)
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при начале интервью: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при начале интервью: {str(e)}"
+        )
+
+
+@app.post("/message/stream", response_model=InterviewStepResponse, status_code=status.HTTP_200_OK)
+async def process_message_stream(request: MessageRequest) -> InterviewStepResponse:
+    """Обработка ответа пользователя с использованием стриминга внутри."""
+    if request.session_id not in agents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Сессия интервью не найдена"
+        )
+    
+    try:
+        agent = agents[request.session_id]
+        
+        chunks = []
+        for chunk in agent.process_answer_stream(request.user_answer):
+            chunks.append(chunk)
+        
+        if not chunks:
+            raise RuntimeError("Пустой ответ от модели")
+        
+        full_response = "".join(chunks)
+        
+        if full_response.strip().startswith("{"):
+            try:
+                step_data = json.loads(full_response)
+                return InterviewStepResponse(**step_data)
+            except json.JSONDecodeError:
+                pass
+        
+        code_submission = agent._parse_code_submission(request.user_answer)
+        parsed = agent._parse_ai_response(full_response)
+        response_type = parsed.get("type", "dialog_response")
+        
+        if code_submission and response_type == "new_step":
+            next_step = parsed.get("nextStep", {})
+            next_step_type = next_step.get("type", "DIALOG")
+            
+            next_step_data = None
+            if next_step_type == "CODE_TASK":
+                code_task = next_step.get("codeTask", {})
+                next_step_data = {
+                    "type": "CODE_TASK",
+                    "code_task": {
+                        "topic": code_task.get("topic", "Python"),
+                        "difficulty": code_task.get("difficulty", "medium"),
+                        "language": code_task.get("language", "python")
+                    }
+                }
+            else:
+                question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                next_step_data = {
+                    "type": "DIALOG",
+                    "question_text": question_text
+                }
+            
+            step = {
+                "type": "DIALOG",
+                "question_text": parsed.get("answerText", ""),
+                "status": "IN_PROGRESS",
+                "score": parsed.get("score"),
+                "ai_feedback": parsed.get("answerText", ""),
+                "user_answer": request.user_answer,
+                "feedback": parsed.get("feedback", ""),
+                "next_step": next_step_data
+            }
+            return InterviewStepResponse(**step)
+        
+        if response_type == "final_feedback":
+            step = {
+                "type": "DIALOG",
+                "question_text": parsed.get("answerText", ""),
+                "status": "COMPLETED",
+                "score": parsed.get("totalScore"),
+                "ai_feedback": parsed.get("overallFeedback", ""),
+                "user_answer": request.user_answer,
+                "feedback": parsed.get("feedback", ""),
+                "next_step": None
+            }
+        elif response_type == "new_step":
+            next_step = parsed.get("nextStep", {})
+            next_step_type = next_step.get("type", "DIALOG")
+            
+            next_step_data = None
+            if next_step_type == "CODE_TASK":
+                code_task = next_step.get("codeTask", {})
+                next_step_data = {
+                    "type": "CODE_TASK",
+                    "code_task": {
+                        "topic": code_task.get("topic", "Python"),
+                        "difficulty": code_task.get("difficulty", "medium"),
+                        "language": code_task.get("language", "python")
+                    }
+                }
+                question_text = parsed.get("answerText", "")
+            else:
+                question_text = next_step.get("questionText", parsed.get("answerText", ""))
+                next_step_data = {
+                    "type": "DIALOG",
+                    "question_text": question_text
+                }
+            
+            step = {
+                "type": "DIALOG" if next_step_type == "DIALOG" else "CODE_TASK",
+                "question_text": question_text,
+                "status": "COMPLETED" if agent.interview_ended else "IN_PROGRESS",
+                "score": parsed.get("score"),
+                "ai_feedback": parsed.get("answerText", ""),
+                "user_answer": request.user_answer,
+                "feedback": parsed.get("feedback", ""),
+                "next_step": next_step_data
+            }
+        else:
+            answer_text = parsed.get("answerText", "")
+            step = {
+                "type": "DIALOG",
+                "question_text": answer_text,
+                "status": "COMPLETED" if agent.interview_ended else "IN_PROGRESS",
+                "score": None,
+                "ai_feedback": answer_text,
+                "user_answer": request.user_answer,
+                "feedback": None,
+                "next_step": {
+                    "type": "DIALOG",
+                    "question_text": answer_text
+                }
+            }
         
         if step.get("status") == "COMPLETED" and agent.is_interview_complete():
             final_feedback = agent.generate_feedback()

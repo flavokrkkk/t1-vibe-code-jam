@@ -196,6 +196,15 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 **НАЧИНАЙ ОТВЕТ СРАЗУ С ```json** и **ЗАКАНЧИВАЙ ```** — без пояснений.
 
+### ВАЖНО ДЛЯ ПЕРВОГО ШАГА:
+
+При начале интервью **ОБЯЗАТЕЛЬНО**:
+1. Представься как интервьюер
+2. Поприветствуй кандидата
+3. Задай первый вопрос
+
+В `answerText` должно быть приветствие (например: "Здравствуйте! Меня зовут [имя], я буду проводить интервью на позицию {job_title}. Давайте начнем."), а в `nextStep.questionText` — первый вопрос.
+
 Начинай интервью с приветствия и первого вопроса (используй `new_step` с `nextStep.type = "{InterviewStepType["DIALOG"]}"`)."""
 
 
@@ -301,6 +310,10 @@ class InterviewAgent:
         messages.append(HumanMessage(content=user_input))
         return messages
 
+    def _stream_llm_response(self, messages: list) -> Any:
+        """Стриминг ответа от LLM."""
+        return self.llm.stream(messages)
+
     def _check_interview_end(self, response: str) -> bool:
         """Проверка, завершил ли агент интервью."""
         end_markers = [
@@ -392,7 +405,7 @@ class InterviewAgent:
                 self.required_skills,
                 self.amount_of_tasks
             )),
-            HumanMessage(content="Начни интервью. Представься и задай первый вопрос кандидату.")
+            HumanMessage(content="Начни интервью. Обязательно представься, поприветствуй кандидата и задай первый вопрос. В answerText должно быть приветствие и первый вопрос вместе.")
         ]
         
         response = self.llm.invoke(messages)
@@ -405,7 +418,15 @@ class InterviewAgent:
         if parsed.get("type") == "new_step":
             next_step = parsed.get("nextStep", {})
             next_step_type = next_step.get("type", InterviewStepType["DIALOG"])
-            question_text = next_step.get("questionText", parsed.get("answerText", ""))
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            
+            if self.questions_asked == 0 and answer_text and next_question_text:
+                question_text = f"{answer_text} {next_question_text}"
+            elif self.questions_asked == 0:
+                question_text = answer_text or next_question_text
+            else:
+                question_text = next_question_text or answer_text
             
             next_step_data = None
             if next_step_type == InterviewStepType["CODE_TASK"]:
@@ -421,7 +442,7 @@ class InterviewAgent:
             else:
                 next_step_data = {
                     "type": "DIALOG",
-                    "question_text": question_text
+                    "question_text": next_question_text or answer_text
                 }
             
             self.conversation_history.append(HumanMessage(content="Начни интервью"))
@@ -433,7 +454,7 @@ class InterviewAgent:
                 "question_text": question_text,
                 "status": "IN_PROGRESS",
                 "score": parsed.get("score"),
-                "ai_feedback": parsed.get("answerText"),
+                "ai_feedback": answer_text,
                 "user_answer": None,
                 "feedback": parsed.get("feedback"),
                 "next_step": next_step_data
@@ -456,6 +477,82 @@ class InterviewAgent:
                     "question_text": answer_text
                 }
             }
+
+    def start_interview_stream(
+        self,
+        job_title: str,
+        required_skills: list[str],
+        amount_of_tasks: int,
+    ):
+        """Начало интервью со стримингом ответа."""
+        self.job_title = job_title
+        self.required_skills = required_skills
+        self.amount_of_tasks = amount_of_tasks
+        self.interview_ended = False
+        self.conversation_history = []
+        self.code_submit_count = {}
+        self.questions_asked = 0
+        self.negative_answers_count = 0
+        
+        messages = [
+            SystemMessage(content=get_system_prompt(
+                self.job_title,
+                self.required_skills,
+                self.amount_of_tasks
+            )),
+            HumanMessage(content="Начни интервью. Обязательно представься, поприветствуй кандидата и задай первый вопрос. В answerText должно быть приветствие и первый вопрос вместе.")
+        ]
+        
+        full_response = ""
+        for chunk in self._stream_llm_response(messages):
+            if hasattr(chunk, 'content'):
+                content = chunk.content
+                if content:
+                    full_response += content
+                    yield content
+        
+        if not full_response:
+            raise RuntimeError("Пустой ответ от модели")
+        
+        parsed = self._parse_ai_response(full_response)
+        
+        if parsed.get("type") == "new_step":
+            next_step = parsed.get("nextStep", {})
+            next_step_type = next_step.get("type", InterviewStepType["DIALOG"])
+            answer_text = parsed.get("answerText", "")
+            next_question_text = next_step.get("questionText", "")
+            
+            if self.questions_asked == 0 and answer_text and next_question_text:
+                question_text = f"{answer_text} {next_question_text}"
+            elif self.questions_asked == 0:
+                question_text = answer_text or next_question_text
+            else:
+                question_text = next_question_text or answer_text
+            
+            next_step_data = None
+            if next_step_type == InterviewStepType["CODE_TASK"]:
+                code_task = next_step.get("codeTask", {})
+                next_step_data = {
+                    "type": "CODE_TASK",
+                    "code_task": {
+                        "topic": code_task.get("topic", "Python"),
+                        "difficulty": code_task.get("difficulty", "medium"),
+                        "language": code_task.get("language", "python")
+                    }
+                }
+            else:
+                next_step_data = {
+                    "type": "DIALOG",
+                    "question_text": next_question_text or answer_text
+                }
+            
+            self.conversation_history.append(HumanMessage(content="Начни интервью"))
+            self.conversation_history.append(AIMessage(content=full_response))
+            self.questions_asked = 1
+        else:
+            answer_text = parsed.get("answerText", full_response[:300])
+            self.conversation_history.append(HumanMessage(content="Начни интервью"))
+            self.conversation_history.append(AIMessage(content=full_response))
 
     def _parse_code_submission(self, user_answer: str) -> dict[str, Any] | None:
         """Парсинг структурированного ответа с кодом."""
@@ -720,7 +817,7 @@ class InterviewAgent:
                         "language": code_task.get("language", "python")
                     }
                 }
-                question_text = None
+                question_text = parsed.get("answerText", "")
             else:
                 question_text = next_step.get("questionText", parsed.get("answerText", ""))
                 next_step_data = {
@@ -731,7 +828,7 @@ class InterviewAgent:
             if is_last_step and not self.waiting_for_completion_confirmation:
                 self.waiting_for_completion_confirmation = True
             
-            result = {
+            return {
                 "type": "DIALOG" if next_step_type == InterviewStepType["DIALOG"] else "CODE_TASK",
                 "question_text": question_text,
                 "status": "COMPLETED" if self.interview_ended else "IN_PROGRESS",
@@ -741,7 +838,6 @@ class InterviewAgent:
                 "feedback": parsed.get("feedback", ""),
                 "next_step": next_step_data
             }
-            return result
         else:
             answer_text = parsed.get("answerText", "")
             
@@ -761,6 +857,192 @@ class InterviewAgent:
                     "question_text": answer_text
                 }
             }
+
+    def process_answer_stream(self, user_answer: str):
+        """Обработка ответа кандидата со стримингом."""
+        if self.interview_ended:
+            yield json.dumps({
+                "type": "DIALOG",
+                "question_text": "Интервью уже завершено.",
+                "status": "COMPLETED",
+                "score": None,
+                "ai_feedback": None,
+                "user_answer": user_answer,
+                "feedback": None,
+                "next_step": None
+            })
+            return
+        
+        code_submission = self._parse_code_submission(user_answer)
+        if code_submission:
+            input_prompt = f"""Кандидат отправил код для задачи.
+
+Описание задачи: {code_submission.get('description', 'Не указано')}
+Тема: {code_submission.get('topic', 'Не указано')}
+
+Код кандидата:
+```python
+{code_submission.get('user_code', '')}
+```
+
+Результаты тестов: {code_submission.get('test_results', 'Не указано')}
+
+Проанализируй код и результаты тестов. Дай фидбэк по коду, укажи что хорошо, что можно улучшить. Если тесты не прошли, объясни почему. Оцени код от 0 до 100.
+
+Используй тип `new_step` с полями:
+- `feedback`: обратная связь по коду (2 предложения)
+- `answerText`: краткий комментарий (1-2 предложения)
+- `score`: оценка от 0 до 100
+- `nextStep`: следующий шаг (DIALOG или CODE_TASK)"""
+            
+            messages = self._get_messages_with_history(input_prompt)
+            full_response = ""
+            for chunk in self._stream_llm_response(messages):
+                if hasattr(chunk, 'content'):
+                    content = chunk.content
+                    if content:
+                        full_response += content
+                        yield content
+            
+            if not full_response:
+                raise RuntimeError("Пустой ответ от модели")
+            
+            parsed = self._parse_ai_response(full_response)
+            response_type = parsed.get("type", "dialog_response")
+            
+            self.conversation_history.append(HumanMessage(content=user_answer))
+            self.conversation_history.append(AIMessage(content=full_response))
+            return
+        
+        last_question = ""
+        if len(self.conversation_history) >= 2:
+            last_ai_msg = self.conversation_history[-1]
+            if isinstance(last_ai_msg, AIMessage):
+                last_question = last_ai_msg.content[:200]
+        
+        user_answer_lower = user_answer.lower().strip()
+        is_negative_answer = any(phrase in user_answer_lower for phrase in [
+            "не знаю", "не помню", "не знаю разницы", "не понимаю", 
+            "не могу", "не умею", "не знаю как", "не помню как",
+            "не использовал", "не использовал типы", "не работал",
+            "не знаю что", "не помню что", "не знаю как это",
+            "не знаю об этом", "не знаком", "не знаком с"
+        ])
+        
+        if is_negative_answer:
+            self.negative_answers_count += 1
+        else:
+            self.negative_answers_count = 0
+        
+        should_end = (
+            self.questions_asked >= self.amount_of_tasks or
+            self.negative_answers_count >= 3
+        )
+        
+        next_question_num = self.questions_asked + 1
+        current_step_index = self.questions_asked
+        is_last_step = (current_step_index + 1) >= self.amount_of_tasks
+        
+        context_info = f"Текущий шаг: статус IN_PROGRESS, индекс: {current_step_index + 1}/{self.amount_of_tasks}. Отрицательных ответов подряд: {self.negative_answers_count}."
+        
+        if is_negative_answer:
+            warning_text = ""
+            if is_last_step or should_end:
+                warning_text = "\n\nВНИМАНИЕ: Это последний шаг или кандидат не знает ответы на несколько вопросов подряд. Если это последний шаг - используй `dialog_response` с вопросом 'У вас остались вопросы? Если нет - можем завершить интервью.' Если кандидат подтвердит завершение - используй `final_feedback`."
+            
+            input_prompt = f"""{context_info}
+
+Кандидат ответил на твой вопрос следующим образом: '{user_answer}'.
+
+КРИТИЧЕСКИ ВАЖНО: Кандидат сказал, что НЕ ЗНАЕТ/НЕ ИСПОЛЬЗОВАЛ/НЕ РАБОТАЛ. Это означает:
+- Кандидат НЕ упомянул никаких технических деталей
+- Кандидат НЕ дал правильного ответа
+- Кандидат НЕ показал знаний по этой теме
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `new_step` с низким score (0-30)
+- В `feedback` честно укажи, что кандидат не знает ответа
+- В `answerText` кратко признай это
+- В `nextStep` задай следующий вопрос (DIALOG) или переходи к другой теме
+- НЕ придумывай, что кандидат мог сказать
+- НЕ хвали кандидата за ответ, которого он не дал
+{warning_text}"""
+        else:
+            is_completion_confirmation = any(phrase in user_answer_lower for phrase in [
+                "нет вопросов", "нет", "можно завершать", "можно завершить",
+                "завершаем", "завершить", "готов", "всё", "все"
+            ]) and len(user_answer_lower) < 50
+            
+            if self.waiting_for_completion_confirmation:
+                if is_completion_confirmation:
+                    input_prompt = f"""{context_info}
+
+Кандидат подтвердил завершение интервью: '{user_answer}'.
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `final_feedback`
+- Предоставь итоговую обратную связь по всему интервью
+- Включи оценку по каждому навыку, сильные стороны, области для улучшения"""
+                else:
+                    input_prompt = f"""{context_info}
+
+Кандидат задал вопрос: '{user_answer}'.
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `dialog_response`
+- Ответь на вопрос кандидата
+- Затем снова спроси: 'Ещё вопросы? Если нет — можем завершить.'"""
+            elif is_last_step:
+                input_prompt = f"""{context_info}
+
+Кандидат ответил на твой предыдущий вопрос следующим образом: '{user_answer}'.
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `new_step` для завершения последнего шага
+- После этого используй `dialog_response` с вопросом 'У вас остались вопросы? Если нет — можем завершить интервью.'"""
+            else:
+                input_prompt = f"""{context_info}
+
+Кандидат ответил на твой предыдущий вопрос следующим образом: '{user_answer}'.
+
+ТВОЯ ЗАДАЧА:
+- Используй тип `new_step`
+- В `feedback` дай обратную связь по ответу (2 предложения)
+- В `answerText` кратко прокомментируй ответ (1-2 предложения)
+- В `score` оцени ответ от 0 до 100
+- В `nextStep` задай следующий вопрос (DIALOG) или задачу на код (CODE_TASK)"""
+        
+        messages = self._get_messages_with_history(input_prompt)
+        full_response = ""
+        for chunk in self._stream_llm_response(messages):
+            if hasattr(chunk, 'content'):
+                content = chunk.content
+                if content:
+                    full_response += content
+                    yield content
+        
+        if not full_response:
+            raise RuntimeError("Пустой ответ от модели")
+        
+        parsed = self._parse_ai_response(full_response)
+        response_type = parsed.get("type", "dialog_response")
+        
+        self.conversation_history.append(HumanMessage(content=user_answer))
+        self.conversation_history.append(AIMessage(content=full_response))
+        
+        if response_type == "final_feedback":
+            self.interview_ended = True
+            self.waiting_for_completion_confirmation = False
+        elif response_type == "new_step":
+            self.questions_asked += 1
+            self.waiting_for_completion_confirmation = False
+            
+            if is_last_step and not self.waiting_for_completion_confirmation:
+                self.waiting_for_completion_confirmation = True
+        else:
+            answer_text = parsed.get("answerText", "")
+            if "остались вопросы" in answer_text.lower() or "ещё вопросы" in answer_text.lower():
+                self.waiting_for_completion_confirmation = True
 
     def process_code_submission(
         self,

@@ -4,8 +4,52 @@
 
 ## Установка
 
+### Создание виртуального окружения
+
 ```bash
+# Создание виртуального окружения
+python3 -m venv venv
+
+# Активация виртуального окружения
+# На macOS/Linux:
+source venv/bin/activate
+
+# На Windows:
+# venv\Scripts\activate
+
+# Обновление pip
+pip install --upgrade pip
+
+# Установка зависимостей
 pip install -r requirements.txt
+```
+
+### Запуск API сервера
+
+**Вариант 1: Автоматический запуск (рекомендуется)**
+```bash
+./start.sh
+```
+
+**Вариант 2: Ручной запуск**
+```bash
+# Убедитесь, что виртуальное окружение активировано
+source venv/bin/activate
+
+# Запуск сервера
+python run_api.py
+```
+
+Сервер будет доступен по адресу `http://localhost:8080`
+
+### Тестирование
+
+```bash
+# Запуск тестов
+pytest test_api.py -v
+
+# Интерактивное тестирование диалога
+python test_dialog.py
 ```
 
 ## Получение API ключа
@@ -22,7 +66,117 @@ export SCIBOX_BASE_URL="https://llm.t1v.scibox.tech/v1"
 export SCIBOX_BASE_URL="http://45.145.191.148:4000/v1"
 ```
 
-## Использование InterviewAgent
+## API Эндпоинты
+
+### Начало интервью
+
+**POST `/start`** — начало интервью (обычный режим)
+
+**POST `/start/stream`** — начало интервью (с использованием стриминга внутри)
+
+Запрос:
+```json
+{
+  "job_title": "Python Developer",
+  "required_skills": ["Python", "FastAPI", "SQL"],
+  "amount_of_tasks": 5,
+  "session_id": "optional-session-id"
+}
+```
+
+Ответ:
+```json
+{
+  "session_id": "uuid-сессии",
+  "step": {
+    "type": "DIALOG",
+    "question_text": "Текст первого вопроса",
+    "status": "IN_PROGRESS",
+    "score": null,
+    "ai_feedback": "Приветствие и первый вопрос",
+    "user_answer": null,
+    "feedback": null,
+    "next_step": {
+      "type": "DIALOG",
+      "question_text": "Следующий вопрос"
+    }
+  }
+}
+```
+
+### Обработка ответа пользователя
+
+**POST `/message`** — обработка ответа (обычный режим)
+
+**POST `/message/stream`** — обработка ответа (с использованием стриминга внутри)
+
+Запрос:
+```json
+{
+  "session_id": "uuid-сессии",
+  "user_answer": "Я работал с Python 3 года, использовал FastAPI для создания REST API."
+}
+```
+
+Ответ:
+```json
+{
+  "type": "DIALOG",
+  "question_text": "Отличный опыт! Расскажите подробнее о вашем опыте с FastAPI.",
+  "status": "IN_PROGRESS",
+  "score": 85,
+  "ai_feedback": "Кандидат показал хорошее понимание технологий.",
+  "user_answer": "Я работал с Python 3 года...",
+  "feedback": "Хороший ответ с конкретными примерами. Можно было упомянуть про async/await.",
+  "next_step": {
+    "type": "DIALOG",
+    "question_text": "Следующий вопрос"
+  }
+}
+```
+
+### Генерация задачи на код
+
+**POST `/generate_task`** — генерация полной задачи на программирование
+
+Запрос:
+```json
+{
+  "topic": "AsyncIO",
+  "difficulty": "medium",
+  "language": "python"
+}
+```
+
+Ответ:
+```json
+{
+  "description": "Подробное описание задачи",
+  "initial_code": "class Solution(object):\n    def solve(self, ...):\n        pass",
+  "test_cases": [
+    {"input": "...", "output": "..."},
+    {"input": "...", "output": "..."}
+  ],
+  "topic": "AsyncIO",
+  "difficulty": "medium",
+  "language": "python"
+}
+```
+
+### Управление сессиями
+
+**DELETE `/session/{session_id}`** — удаление сессии интервью
+
+**GET `/health`** — проверка здоровья сервиса
+
+## Разница между обычными и стриминг эндпоинтами
+
+- **`/start` и `/message`** — используют `llm.invoke()` (обычный режим)
+- **`/start/stream` и `/message/stream`** — используют `llm.stream()` внутри для получения ответа от LLM, но возвращают полный ответ клиенту (как обычные эндпоинты)
+
+Оба типа эндпоинтов возвращают одинаковый формат ответа. Стриминг используется только внутри для оптимизации получения ответа от LLM.
+
+## Использование InterviewAgent напрямую
 
 ```python
 from interview_agent import InterviewAgent
@@ -43,7 +197,7 @@ feedback = agent.generate_feedback()
 
 - `job_title`: Название вакансии
 - `required_skills`: Список требуемых навыков
-- `amount_of_tasks`: Количество задач для интервью
+- `amount_of_tasks`: Количество задач для интервью (1-30)
 - `model`: Модель SciBox (по умолчанию "qwen3-32b-awq")
 - `api_key`: API ключ (опционально, можно через переменную окружения)
 
@@ -58,57 +212,60 @@ feedback = agent.generate_feedback()
 
 - `bge-m3` — эмбеддинг-модель для поиска и ранжирования, 7 RPS
 
-## Использование SciBoxClient
+## Примеры использования API
 
-```python
-from scibox_client import SciBoxClient
-
-client = SciBoxClient()
-
-# Чат-запрос
-response = client.chat_completion(
-    messages=[
-        {"role": "system", "content": "/no_think Ты помощник"},
-        {"role": "user", "content": "Привет!"}
-    ],
-    model="qwen3-32b-awq",
-    temperature=0.7,
-    max_tokens=256
-)
-print(response.choices[0].message.content)
-
-# Эмбеддинги
-emb = client.embeddings(
-    input_text=["Текст 1", "Текст 2"],
-    model="bge-m3"
-)
-```
-
-## Работа с эмбеддингами
-
-```python
-from embeddings_utils import get_embeddings, find_most_similar, cosine_similarity
-
-# Получение эмбеддингов
-embeddings = get_embeddings(["Текст 1", "Текст 2"])
-
-# Поиск похожих текстов
-results = find_most_similar(
-    query="Запрос",
-    candidate_texts=["Текст 1", "Текст 2", "Текст 3"],
-    top_k=2
-)
-
-# Сравнение схожести
-similarity = cosine_similarity(embeddings[0], embeddings[1])
-```
-
-## Примеры
-
-Запустите `scibox_example.py` для просмотра примеров использования всех возможностей API:
+### Пример с curl
 
 ```bash
-python scibox_example.py
+# Начало интервью
+curl -X POST http://localhost:8080/start/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_title": "Python Developer",
+    "required_skills": ["Python", "FastAPI"],
+    "amount_of_tasks": 5
+  }'
+
+# Отправка ответа
+curl -X POST http://localhost:8080/message/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "ваш-session-id",
+    "user_answer": "Я работал с Python 3 года"
+  }'
+```
+
+### Пример с Python requests
+
+```python
+import requests
+
+BASE_URL = "http://localhost:8080"
+
+# Начало интервью
+response = requests.post(
+    f"{BASE_URL}/start/stream",
+    json={
+        "job_title": "Python Developer",
+        "required_skills": ["Python", "FastAPI", "SQL"],
+        "amount_of_tasks": 5
+    }
+)
+data = response.json()
+session_id = data["session_id"]
+print(f"Первый вопрос: {data['step']['question_text']}")
+
+# Отправка ответа
+response = requests.post(
+    f"{BASE_URL}/message/stream",
+    json={
+        "session_id": session_id,
+        "user_answer": "Я работал с Python 3 года, использовал FastAPI."
+    }
+)
+step = response.json()
+print(f"Ответ интервьюера: {step['question_text']}")
+print(f"Оценка: {step.get('score')}")
 ```
 
 ## Ограничения RPS
