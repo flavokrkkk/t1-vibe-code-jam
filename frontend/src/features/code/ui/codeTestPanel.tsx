@@ -75,36 +75,12 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                 </div>
               </div>
             </div>
-            <div className="flex space-x-2 justify-end text-right border-t absolute border-zinc-200 bg-zinc-50 w-full bottom-0 right-0 p-2">
-              <button
-                onClick={onRunTests}
-                disabled={isAILoading}
-                className={cn(
-                  "px-6 py-2 rounded-lg text-white font-medium transition-colors duration-200 cursor-pointer",
-                  "bg-white border text-blue-700 border-blue-700",
-                  isAILoading && "opacity-50 cursor-not-allowed bg-blue-700"
-                )}
-              >
-                {isAILoading ? "Running Tests..." : "Запустить тесты"}
-              </button>
-              <button
-                onClick={onRunTests}
-                disabled={isAILoading}
-                className={cn(
-                  "px-6 py-2 rounded-lg text-white font-medium transition-colors duration-200 cursor-pointer",
-                  "bg-blue-500 hover:bg-blue-700",
-                  isAILoading && "opacity-50 cursor-not-allowed bg-blue-700"
-                )}
-              >
-                {isAILoading ? "Отправка..." : "Отправить код"}
-              </button>
-            </div>
           </section>
         ) : (
           <div className="text-gray-500 text-center py-8 h-full flex flex-col justify-center items-center">
-            <p className="mb-2">Тестовый случай не выбран.</p>
+            <p className="mb-1">Тестовый случай не выбран.</p>
             <p>Пожалуйста, выберите тестовый случай или добавьте новый.</p>
-            <button
+            {/* <button
               disabled={isAILoading}
               className={cn(
                 "mt-4 px-4 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-3xl",
@@ -112,9 +88,34 @@ export const TestPanel: React.FC<TestPanelProps> = ({
               )}
             >
               Добавить первый тестовый случай
-            </button>
+            </button> */}
           </div>
         )}
+
+        <div className="flex space-x-2 justify-end text-right border-t absolute border-zinc-200 bg-zinc-50 w-full bottom-0 right-0 p-2">
+          <button
+            onClick={onRunTests}
+            disabled={isAILoading || !activeCase}
+            className={cn(
+              "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
+              "bg-white border text-blue-700 border-blue-700",
+              (isAILoading || !activeCase) && "cursor-not-allowed opacity-35"
+            )}
+          >
+            {isAILoading ? "Running Tests..." : "Запустить тесты"}
+          </button>
+          <button
+            onClick={onRunTests}
+            disabled={isAILoading}
+            className={cn(
+              "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
+              "bg-blue-500 hover:bg-blue-700",
+              isAILoading && "opacity-50 cursor-not-allowed bg-blue-700"
+            )}
+          >
+            {isAILoading ? "Отправка..." : "Отправить код"}
+          </button>
+        </div>
       </div>
     </div>
   );
