@@ -1,5 +1,11 @@
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useGetAllInterview } from "@/entities/interview/hooks/useInterview";
-import { InterviewStatus } from "@/entities/interview/types/types";
+import {
+  InterviewStatus,
+  InterviewListItem,
+} from "@/entities/interview/types/types";
+import { useCurrentUser } from "@/entities/user/hooks/useCurrentUser";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback } from "@/shared/ui/avatar/avatar";
 import {
@@ -37,10 +43,36 @@ const statusConfig = {
   },
 };
 
-const InterviewHistoryPage = () => {
-  const { data: interviews = [], isLoading } = useGetAllInterview();
+type TabType = "my" | "shared";
 
-  if (isLoading) {
+const InterviewHistoryPage = () => {
+  const [activeTab, setActiveTab] = useState<TabType>("my");
+  const { data: interviews = [], isLoading } = useGetAllInterview();
+  const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
+
+  const { myInterviews, sharedInterviews } = useMemo(() => {
+    if (!currentUser) {
+      return { myInterviews: [], sharedInterviews: [] };
+    }
+
+    const my: InterviewListItem[] = [];
+    const shared: InterviewListItem[] = [];
+
+    interviews.forEach((interview) => {
+      if (interview.user_id === currentUser.id) {
+        my.push(interview);
+      } else if (interview.creator_id === currentUser.id) {
+        shared.push(interview);
+      }
+    });
+
+    return { myInterviews: my, sharedInterviews: shared };
+  }, [interviews, currentUser]);
+
+  const currentInterviews =
+    activeTab === "my" ? myInterviews : sharedInterviews;
+
+  if (isLoading || isUserLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Загрузка истории интервью...</div>
@@ -75,108 +107,202 @@ const InterviewHistoryPage = () => {
           <div className="absolute inset-0 flex flex-col justify-between p-6">
             <div className="flex justify-between items-start">
               <h1 className="text-3xl font-semibold text-white">
-                Все ваши собеседования в одном месте
+                Все ваши интервью в одном месте
               </h1>
             </div>
           </div>
         </div>
-        <div className="grid gap-8 md:grid-cols-2">
-          {interviews.map((interview) => {
-            const StatusIcon = statusConfig[interview.status].icon;
-            const totalSteps = interview.amount_of_tasks;
-            const completedSteps =
-              interview.current_step_index +
-              (interview.status === InterviewStatus.COMPLETED ? 1 : 0);
-            const progress =
-              totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
-            return (
-              <div
-                key={interview.id}
-                className="bg-white rounded-4xl transition-all duration-300 overflow-hidden group"
+        {/* Табы */}
+        <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+          <div className="relative flex">
+            {/* Ползунок */}
+            <motion.div
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl"
+              initial={false}
+              animate={{
+                left: activeTab === "my" ? "0%" : "50%",
+                width: "50%",
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 300,
+                damping: 30,
+              }}
+            />
+
+            {/* Кнопки табов */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("my")}
+              className="relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-xl transition-colors duration-200"
+            >
+              <motion.span
+                className="relative block"
+                animate={{
+                  color: activeTab === "my" ? "#ffffff" : "#6b7280",
+                }}
+                transition={{ duration: 0.2 }}
               >
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-12 h-12 ring-4 ring-blue-100">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white font-bold">
-                          <Briefcase className="w-6 h-6" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col -space-y-1.5">
-                        <h3 className="font-bold text-lg text-gray-900 line-clamp-2">
-                          {interview.job_role_description || "Собеседование"}
-                        </h3>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                          <Calendar className="w-3 h-3" />
-                          {format(
-                            new Date(interview.created_at),
-                            "dd MMM yyyy"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                Мои интервью
+                {myInterviews.length > 0 && (
+                  <span className="ml-2 text-xs opacity-80">
+                    ({myInterviews.length})
+                  </span>
+                )}
+              </motion.span>
+            </button>
 
-                  <div className="mb-5">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Прогресс</span>
-                      <span className="font-medium text-gray-900">
-                        {completedSteps} из {totalSteps}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-700"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-blue-100 rounded-2xl p-4 text-center">
-                      <p className="text-2xl font-bold text-blue-600">
-                        {interview.chat_messages?.length ??
-                          interview.chat_messages_count ??
-                          0}
-                      </p>
-                      <p className="text-xs text-gray-600">Сообщений</p>
-                    </div>
-                    {interview.total_score !== null && (
-                      <div className="bg-green-100 rounded-2xl p-4 text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {interview.total_score}
-                        </p>
-                        <p className="text-xs text-gray-600">Баллов</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <TagChip
-                      className={`${
-                        statusConfig[interview.status].color
-                      } text-white border-0 flex items-center gap-2`}
-                    >
-                      <StatusIcon className="w-3 h-3" />
-                      {statusConfig[interview.status].label}
-                    </TagChip>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="bg-blue-50 text-blue-600 hover:text-blue-600 transition-all cursor-pointer"
-                    >
-                      {interview.status === InterviewStatus.COMPLETED
-                        ? "Посмотреть"
-                        : "Продолжить"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+            <button
+              type="button"
+              onClick={() => setActiveTab("shared")}
+              className="relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-xl transition-colors duration-200"
+            >
+              <motion.span
+                className="relative block"
+                animate={{
+                  color: activeTab === "shared" ? "#ffffff" : "#6b7280",
+                }}
+                transition={{ duration: 0.2 }}
+              >
+                Интервью по моей ссылке
+                {sharedInterviews.length > 0 && (
+                  <span className="ml-2 text-xs opacity-80">
+                    ({sharedInterviews.length})
+                  </span>
+                )}
+              </motion.span>
+            </button>
+          </div>
         </div>
+
+        {/* Контент табов */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {currentInterviews.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center">
+                <div className="bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                  <Briefcase className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {activeTab === "my"
+                    ? "У вас пока нет интервью"
+                    : "Нет интервью по вашей ссылке"}
+                </h3>
+                <p className="text-gray-500">
+                  {activeTab === "my"
+                    ? "Начните своё первое собеседование!"
+                    : "Поделитесь ссылкой, чтобы другие могли пройти интервью"}
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-8 md:grid-cols-2">
+                {currentInterviews.map((interview) => {
+                  const StatusIcon = statusConfig[interview.status].icon;
+                  const totalSteps = interview.amount_of_tasks;
+                  const completedSteps =
+                    interview.current_step_index +
+                    (interview.status === InterviewStatus.COMPLETED ? 1 : 0);
+                  const progress =
+                    totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+
+                  return (
+                    <div
+                      key={interview.id}
+                      className="bg-white rounded-4xl transition-all duration-300 overflow-hidden group"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-5">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-12 h-12 ring-4 ring-blue-100">
+                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white font-bold">
+                                <Briefcase className="w-6 h-6" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col -space-y-1.5">
+                              <h3 className="font-bold text-lg text-gray-900 line-clamp-2">
+                                {interview.job_role_description ||
+                                  "Собеседование"}
+                              </h3>
+                              <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                                <Calendar className="w-3 h-3" />
+                                {format(
+                                  new Date(interview.created_at),
+                                  "dd MMM yyyy"
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-5">
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-gray-600">Прогресс</span>
+                            <span className="font-medium text-gray-900">
+                              {completedSteps} из {totalSteps}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-700"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                          <div className="bg-blue-100 rounded-2xl p-4 text-center">
+                            <p className="text-2xl font-bold text-blue-600">
+                              {interview.chat_messages?.length ??
+                                interview.chat_messages_count ??
+                                0}
+                            </p>
+                            <p className="text-xs text-gray-600">Сообщений</p>
+                          </div>
+                          {interview.total_score !== null && (
+                            <div className="bg-green-100 rounded-2xl p-4 text-center">
+                              <p className="text-2xl font-bold text-green-600">
+                                {interview.total_score}
+                              </p>
+                              <p className="text-xs text-gray-600">Баллов</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <TagChip
+                            className={`${
+                              statusConfig[interview.status].color
+                            } text-white border-0 flex items-center gap-2`}
+                          >
+                            <StatusIcon className="w-3 h-3" />
+                            {statusConfig[interview.status].label}
+                          </TagChip>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="bg-blue-50 text-blue-600 hover:text-blue-600 transition-all cursor-pointer"
+                          >
+                            {interview.status === InterviewStatus.COMPLETED
+                              ? "Посмотреть"
+                              : "Продолжить"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
