@@ -35,7 +35,12 @@ logger = logging.getLogger(__name__)
 
 
 class InterviewService(BaseDbModelService[Interview]):
-    def __init__(self, session, ml_client: MLClient | None = None, judge0_client: Judge0Client | None = None):
+    def __init__(
+        self,
+        session,
+        ml_client: MLClient | None = None,
+        judge0_client: Judge0Client | None = None,
+    ):
         """Инициализация сервиса интервью."""
         super().__init__(session)
         self.ml_client = ml_client
@@ -74,14 +79,14 @@ class InterviewService(BaseDbModelService[Interview]):
             amount_of_tasks=amount_of_tasks,
             session_id=session_id,
         )
-        
+
         # Получаем next_step и сохраняем его
         next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
         interview.pending_next_step = next_step_data
-        
+
         # Создаем первый шаг из pending_next_step
         await self._create_step_from_pending_next_step(interview)
-        
+
         await self.session.commit()
         await self.session.refresh(interview)
 
@@ -96,50 +101,56 @@ class InterviewService(BaseDbModelService[Interview]):
         if not interview.pending_next_step:
             logger.error("No pending_next_step found")
             return
-            
+
         step_data = interview.pending_next_step
         step_type = step_data.get("type")
-        
+
         # Если next_step пустой или нет типа - не создаем шаг
         if not step_type:
             logger.info("Empty next_step - no new step created")
             interview.pending_next_step = None
             await self.session.flush()
             return
-        
+
         question_text = step_data.get("question_text", "")
         ai_feedback = step_data.get("ai_feedback", "")
-        
+
         message_text = question_text or ai_feedback
-        
+
         # Дефолтное сообщение ТОЛЬКО для первого шага
-        if not message_text and step_type == "DIALOG" and interview.current_step_index == 0:
-             message_text = "Здравствуйте! Готовы начать?"
-        
+        if (
+            not message_text
+            and step_type == "DIALOG"
+            and interview.current_step_index == 0
+        ):
+            message_text = "Здравствуйте! Готовы начать?"
+
         # Если нет текста для не-первого шага - это ошибка
         if not message_text and interview.current_step_index > 0:
-            logger.error(f"No message_text for step {interview.current_step_index}, step_data: {step_data}")
+            logger.error(
+                f"No message_text for step {interview.current_step_index}, step_data: {step_data}"
+            )
             # Не создаем пустой шаг
             interview.pending_next_step = None
             await self.session.flush()
             return
-        
+
         step = InterviewStep(
             interview_id=interview.id,
             type=InterviewStepType(step_type),
             status=InterviewStepStatus.IN_PROGRESS,
             question_text=message_text,
         )
-        
+
         if step_type == "CODE_TASK":
             code_task_data = step_data.get("code_task", {})
-            
-            topic = code_task_data.get("topic") 
+
+            topic = code_task_data.get("topic")
             difficulty = code_task_data.get("difficulty", "medium")
             language = code_task_data.get("language", "python")
-            
+
             selected_task = None
-            
+
             # 1. Ищем все подходящие задачи в БД
             if topic:
                 query = select(CodeTask).where(
@@ -147,25 +158,33 @@ class InterviewService(BaseDbModelService[Interview]):
                     CodeTask.difficulty == difficulty,
                     CodeTask.language == language,
                 )
-                
+
                 result = await self.session.execute(query)
                 all_tasks = result.scalars().all()
-                
+
                 if all_tasks:
                     # Проверяем процент задач с высоким usage_count
                     HIGH_USAGE_THRESHOLD = 10  # Порог для "высокого" usage_count
                     DIVERSITY_THRESHOLD = 0.7  # 70% задач
-                    
-                    high_usage_tasks = [t for t in all_tasks if t.usage_count > HIGH_USAGE_THRESHOLD]
+
+                    high_usage_tasks = [
+                        t for t in all_tasks if t.usage_count > HIGH_USAGE_THRESHOLD
+                    ]
                     high_usage_ratio = len(high_usage_tasks) / len(all_tasks)
-                    
-                    logger.info(f"Found {len(all_tasks)} tasks for topic {topic}, {len(high_usage_tasks)} have usage_count > {HIGH_USAGE_THRESHOLD} ({high_usage_ratio:.1%})")
-                    
+
+                    logger.info(
+                        f"Found {len(all_tasks)} tasks for topic {topic}, {len(high_usage_tasks)} have usage_count > {HIGH_USAGE_THRESHOLD} ({high_usage_ratio:.1%})"
+                    )
+
                     # Если > 70% задач имеют высокий usage_count - добавляем новую задачу через ML
                     if high_usage_ratio > DIVERSITY_THRESHOLD:
-                        logger.info(f"High usage ratio {high_usage_ratio:.1%} > {DIVERSITY_THRESHOLD:.0%}, generating new task to increase diversity")
-                        generated_data = await self.ml_client.generate_code_task(topic, difficulty, language)
-                        
+                        logger.info(
+                            f"High usage ratio {high_usage_ratio:.1%} > {DIVERSITY_THRESHOLD:.0%}, generating new task to increase diversity"
+                        )
+                        generated_data = await self.ml_client.generate_code_task(
+                            topic, difficulty, language
+                        )
+
                         if generated_data and generated_data.get("description"):
                             new_task = CodeTask(
                                 description=generated_data.get("description", ""),
@@ -174,24 +193,32 @@ class InterviewService(BaseDbModelService[Interview]):
                                 test_cases=generated_data.get("test_cases", []),
                                 topic=topic,
                                 difficulty=difficulty,
-                                usage_count=0
+                                usage_count=0,
                             )
                             self.session.add(new_task)
                             await self.session.flush()
                             all_tasks.append(new_task)
-                            logger.info(f"Added new ML-generated task {new_task.id} to pool")
-                    
+                            logger.info(
+                                f"Added new ML-generated task {new_task.id} to pool"
+                            )
+
                     # Выбираем задачу с минимальным usage_count (с рандомизацией среди топ-3)
                     tasks_sorted = sorted(all_tasks, key=lambda t: t.usage_count)
-                    top_candidates = tasks_sorted[:min(3, len(tasks_sorted))]
+                    top_candidates = tasks_sorted[: min(3, len(tasks_sorted))]
                     selected_task = random.choice(top_candidates)
                     selected_task.usage_count += 1
-                    logger.info(f"Selected task {selected_task.id} with usage_count={selected_task.usage_count-1} -> {selected_task.usage_count}")
+                    logger.info(
+                        f"Selected task {selected_task.id} with usage_count={selected_task.usage_count-1} -> {selected_task.usage_count}"
+                    )
                 else:
                     # Если совсем нет задач - создаем первую через ML
-                    logger.info(f"No tasks found for topic {topic}, generating first task")
-                    generated_data = await self.ml_client.generate_code_task(topic, difficulty, language)
-                    
+                    logger.info(
+                        f"No tasks found for topic {topic}, generating first task"
+                    )
+                    generated_data = await self.ml_client.generate_code_task(
+                        topic, difficulty, language
+                    )
+
                     if generated_data and generated_data.get("description"):
                         new_task = CodeTask(
                             description=generated_data.get("description", ""),
@@ -200,7 +227,7 @@ class InterviewService(BaseDbModelService[Interview]):
                             test_cases=generated_data.get("test_cases", []),
                             topic=topic,
                             difficulty=difficulty,
-                            usage_count=1
+                            usage_count=1,
                         )
                         self.session.add(new_task)
                         selected_task = new_task
@@ -211,11 +238,11 @@ class InterviewService(BaseDbModelService[Interview]):
                 if not step.question_text:
                     step.question_text = selected_task.description
             else:
-                 logger.error("Failed to assign a code task to the step.")
-                 step.question_text = "Произошла ошибка при получении задачи. Пожалуйста, сообщите администратору."
+                logger.error("Failed to assign a code task to the step.")
+                step.question_text = "Произошла ошибка при получении задачи. Пожалуйста, сообщите администратору."
 
         self.session.add(step)
-        
+
         # Для DIALOG шагов сохраняем question_text как сообщение
         # (это следующий вопрос от AI)
         if message_text and step_type == "DIALOG":
@@ -225,7 +252,7 @@ class InterviewService(BaseDbModelService[Interview]):
                 text=message_text,
             )
             self.session.add(message)
-        
+
         # Очищаем pending_next_step, так как мы его использовали
         interview.pending_next_step = None
         await self.session.flush()
@@ -362,7 +389,7 @@ class InterviewService(BaseDbModelService[Interview]):
         await self.session.flush()
 
         session_id = str(interview_id)
-        
+
         # Вызываем ML API для оценки ответа И получения next_step
         ml_response = await self.ml_client.process_message(
             session_id=session_id,
@@ -390,16 +417,20 @@ class InterviewService(BaseDbModelService[Interview]):
             # Сохраняем next_step в pending
             next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
             interview.pending_next_step = next_step_data
-            
+
             # Создаем следующий шаг (для CODE_TASK ищем в БД, не дергая ML снова)
             await self._create_step_from_pending_next_step(interview)
             interview.current_step_index += 1
         else:
             interview.status = InterviewStatus.COMPLETED
             interview.total_score = ml_response.get("score")
-            interview.overall_feedback = ml_response.get("ai_feedback") or ml_response.get("feedback")
-            
-            final_message_text = ml_response.get("ai_feedback") or ml_response.get("feedback")
+            interview.overall_feedback = ml_response.get(
+                "ai_feedback"
+            ) or ml_response.get("feedback")
+
+            final_message_text = ml_response.get("ai_feedback") or ml_response.get(
+                "feedback"
+            )
             if final_message_text:
                 final_message = ChatMessage(
                     interview_id=interview.id,
@@ -441,44 +472,46 @@ class InterviewService(BaseDbModelService[Interview]):
         await self.session.flush()
 
         session_id = str(interview_id)
-        
+
         # Собираем данные из стрима
         full_text = ""
         metadata = {}
-        
+
         # Стримим события от ML
         async for event in self.ml_client.process_message_stream(
             session_id=session_id,
             user_answer=text,
         ):
             event_type = event.get("type")
-            
+
             if event_type == "text_chunk":
                 chunk_content = event.get("content", "")
                 full_text += chunk_content
                 logger.debug(f"Streaming text chunk: {chunk_content[:50]}...")
                 # Передаем чанк дальше на фронт
                 yield event
-            
+
             elif event_type == "_metadata":
                 # Внутренние метаданные - НЕ передаем на фронт, только сохраняем
                 metadata = event.get("data", {})
-                logger.info(f"Received metadata: score={metadata.get('score')}, next_step={metadata.get('next_step', {}).get('type')}")
-            
+                logger.info(
+                    f"Received metadata: score={metadata.get('score')}, next_step={metadata.get('next_step', {}).get('type')}"
+                )
+
             elif event_type == "done":
                 # Стрим завершен
                 yield event
                 break
-            
+
             elif event_type == "error":
                 logger.error(f"Ошибка от ML стрима: {event.get('message')}")
                 yield event
                 raise BadRequestException(f"Ошибка ML: {event.get('message')}")
-        
+
         # После завершения стрима - обновляем БД
         # Используем answer_text из metadata (это answerText из JSON ответа ML)
         answer_text = metadata.get("answer_text", full_text)
-        
+
         ml_response = {
             "feedback": metadata.get("feedback"),
             "score": metadata.get("score"),
@@ -486,44 +519,55 @@ class InterviewService(BaseDbModelService[Interview]):
             "ai_feedback": answer_text,
             "status": metadata.get("status", "IN_PROGRESS"),
             "total_score": metadata.get("total_score"),
-            "overall_feedback": metadata.get("overall_feedback")
+            "overall_feedback": metadata.get("overall_feedback"),
         }
-        
-        logger.info(f"ML stream completed. Full text len: {len(full_text)}, answer_text: {answer_text[:100]}")
-        
+
+        logger.info(
+            f"ML stream completed. Full text len: {len(full_text)}, answer_text: {answer_text[:100]}"
+        )
+
         # Обновляем текущий шаг
         await self._update_current_step(interview, ml_response, text)
-        
+
         # НЕ сохраняем answer_text как отдельное сообщение!
         # Оно будет сохранено как question_text следующего шага в _create_step_from_pending_next_step
-        
+
         response_status = ml_response.get("status", "IN_PROGRESS")
-        
+
         if response_status != "COMPLETED":
             # Сохраняем next_step в pending
             next_step_data = ml_response.get("next_step")
             if next_step_data:
                 interview.pending_next_step = next_step_data
-                
+
                 # Создаем следующий шаг
                 await self._create_step_from_pending_next_step(interview)
                 interview.current_step_index += 1
         else:
             interview.status = InterviewStatus.COMPLETED
-            interview.total_score = ml_response.get("total_score") or ml_response.get("score")
-            interview.overall_feedback = ml_response.get("overall_feedback") or full_text
-        
+            interview.total_score = ml_response.get("total_score") or ml_response.get(
+                "score"
+            )
+            interview.overall_feedback = (
+                ml_response.get("overall_feedback") or full_text
+            )
+
         await self.session.commit()
-        
+
         # Отправляем финальный Interview объект (без type, просто модель)
         refreshed_interview = await self.find_interview_by_id(interview_id, None)
         from core.dto.interview import InterviewSchema
-        interview_data = InterviewSchema.model_validate(refreshed_interview, from_attributes=True)
-        
-        # Отправляем чистый Interview как в обычном /message
-        yield interview_data.model_dump(mode='json')
 
-    async def _update_current_step(self, interview: Interview, ml_response: dict[str, Any], user_answer: str):
+        interview_data = InterviewSchema.model_validate(
+            refreshed_interview, from_attributes=True
+        )
+
+        # Отправляем чистый Interview как в обычном /message
+        yield interview_data.model_dump(mode="json")
+
+    async def _update_current_step(
+        self, interview: Interview, ml_response: dict[str, Any], user_answer: str
+    ):
         current_step = next(
             (s for s in interview.steps if s.status == InterviewStepStatus.IN_PROGRESS),
             None,
@@ -536,7 +580,9 @@ class InterviewService(BaseDbModelService[Interview]):
             current_step.score = ml_response.get("score")
             await self.session.flush()
 
-    async def run_playground_code(self, code: str, language: str, test_cases: list[dict] | None = None) -> dict:
+    async def run_playground_code(
+        self, code: str, language: str, test_cases: list[dict] | None = None
+    ) -> dict:
         if not test_cases:
             test_cases = []
         return await self.judge0_client.run_tests(code, language, test_cases)
@@ -564,22 +610,18 @@ class InterviewService(BaseDbModelService[Interview]):
             raise BadRequestException("Кодовая задача для текущего шага не определена.")
 
         current_step.user_code = user_code
-        current_step.status = InterviewStepStatus.COMPLETED 
+        current_step.status = InterviewStepStatus.COMPLETED
 
         test_cases = current_step.code_task.test_cases
         if not isinstance(test_cases, list):
             test_cases = []
-            
+
         judge_result = await self.judge0_client.run_tests(
-            user_code, 
-            current_step.code_task.language, 
-            test_cases
+            user_code, current_step.code_task.language, test_cases
         )
-        
+
         result = await self.session.execute(
-            select(CodeTestResult).where(
-                CodeTestResult.interview_step_id == step_id
-            )
+            select(CodeTestResult).where(CodeTestResult.interview_step_id == step_id)
         )
         for old_result in result.scalars().all():
             await self.session.delete(old_result)
@@ -587,42 +629,48 @@ class InterviewService(BaseDbModelService[Interview]):
 
         passed_count = 0
         total_count = len(judge_result["results"])
-        
+
         for res in judge_result["results"]:
-            test_status = CodeTestResultStatus.PASSED if res["passed"] else CodeTestResultStatus.FAILED
+            test_status = (
+                CodeTestResultStatus.PASSED
+                if res["passed"]
+                else CodeTestResultStatus.FAILED
+            )
             if res["passed"]:
                 passed_count += 1
-                
+
             test_result = CodeTestResult(
                 interview_step_id=step_id,
                 test_id="test",
                 status=test_status,
-                details=f"Expected: {res.get('expected')}, Got: {res.get('stdout')}. Error: {res.get('stderr')}"
+                details=f"Expected: {res.get('expected')}, Got: {res.get('stdout')}. Error: {res.get('stderr')}",
             )
             self.session.add(test_result)
-            
-        execution_summary = f"Code execution result: {passed_count}/{total_count} tests passed."
+
+        execution_summary = (
+            f"Code execution result: {passed_count}/{total_count} tests passed."
+        )
         if passed_count < total_count:
             execution_summary += " Some tests failed."
         else:
             execution_summary += " All tests passed successfully."
-            
+
         # Добавляем описание задачи, так как ML ее не знает (она была выбрана из БД)
         task_context = f"Task Description:\n{current_step.code_task.description}\n"
         if current_step.code_task.topic:
-             task_context += f"Topic: {current_step.code_task.topic}\n"
-            
+            task_context += f"Topic: {current_step.code_task.topic}\n"
+
         session_id = str(interview_id)
-        
+
         # Вызываем ML для оценки И получения next_step
         ml_response = await self.ml_client.process_message(
             session_id=session_id,
-            user_answer=f"{task_context}\nUser Code:\n{user_code}\n\nSystem Execution Result:\n{execution_summary}"
+            user_answer=f"{task_context}\nUser Code:\n{user_code}\n\nSystem Execution Result:\n{execution_summary}",
         )
-        
+
         current_step.feedback = ml_response.get("feedback")
         current_step.score = ml_response.get("score")
-        
+
         # Добавляем feedback от ML в чат
         feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
         if feedback_text:
@@ -633,14 +681,14 @@ class InterviewService(BaseDbModelService[Interview]):
             )
             self.session.add(feedback_message)
             await self.session.flush()
-        
+
         status = ml_response.get("status", "IN_PROGRESS")
         if status != "COMPLETED":
-             # Сохраняем next_step и создаем следующий шаг
-             next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
-             interview.pending_next_step = next_step_data
-             await self._create_step_from_pending_next_step(interview)
-             interview.current_step_index += 1
+            # Сохраняем next_step и создаем следующий шаг
+            next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
+            interview.pending_next_step = next_step_data
+            await self._create_step_from_pending_next_step(interview)
+            interview.current_step_index += 1
         else:
             interview.status = InterviewStatus.COMPLETED
             interview.total_score = ml_response.get("score")
@@ -652,28 +700,27 @@ class InterviewService(BaseDbModelService[Interview]):
 
     async def skip_step(self, interview_id: UUID, step_id: UUID) -> Interview:
         interview = await self.find_interview_by_id(interview_id, None)
-        
+
         if interview.status != InterviewStatus.IN_PROGRESS:
-             raise BadRequestException("Интервью не в процессе.")
-             
+            raise BadRequestException("Интервью не в процессе.")
+
         current_step = next((s for s in interview.steps if s.id == step_id), None)
         if not current_step:
             raise BadRequestException("Шаг не найден.")
-            
+
         current_step.status = InterviewStepStatus.COMPLETED
         current_step.user_answer = "[SKIPPED BY USER]"
         current_step.score = 0
-        
+
         session_id = str(interview_id)
-        
+
         # Вызываем ML для получения фидбека И next_step
         ml_response = await self.ml_client.process_message(
-            session_id=session_id,
-            user_answer="User skipped this task."
+            session_id=session_id, user_answer="User skipped this task."
         )
-        
+
         current_step.feedback = ml_response.get("feedback")
-        
+
         # Добавляем feedback от ML в чат
         feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
         if feedback_text:
@@ -684,13 +731,13 @@ class InterviewService(BaseDbModelService[Interview]):
             )
             self.session.add(feedback_message)
             await self.session.flush()
-        
+
         status = ml_response.get("status", "IN_PROGRESS")
         if status != "COMPLETED":
-             next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
-             interview.pending_next_step = next_step_data
-             await self._create_step_from_pending_next_step(interview)
-             interview.current_step_index += 1
+            next_step_data = ml_response.get("next_step", ml_response.get("step", {}))
+            interview.pending_next_step = next_step_data
+            await self._create_step_from_pending_next_step(interview)
+            interview.current_step_index += 1
         else:
             interview.status = InterviewStatus.COMPLETED
             interview.total_score = ml_response.get("score")
@@ -824,6 +871,33 @@ class InterviewService(BaseDbModelService[Interview]):
         self.session.add(message)
         await self.session.flush()
         await self.session.commit()
-        
+
         # Возвращаем только транскрибированный текст, как ожидает эндпоинт
         return transcribed_text
+
+    async def ban_for_cheating(
+        self,
+        interview_id: UUID,
+        reasons: list[str],
+    ) -> Interview:
+        """Банит интервью за читинг с указанием причин."""
+        interview = await self.find_interview_by_id(interview_id, None)
+
+        if interview.status == InterviewStatus.BANNED:
+            raise BadRequestException("Интервью уже забанено.")
+
+        # Устанавливаем статус BANNED
+        interview.status = InterviewStatus.BANNED
+        interview.ban_reasons = reasons
+        from datetime import datetime, timezone
+
+        interview.banned_at = datetime.now(timezone.utc)
+
+        # Завершаем все активные шаги
+        for step in interview.steps:
+            if step.status == InterviewStepStatus.IN_PROGRESS:
+                step.status = InterviewStepStatus.COMPLETED
+                step.feedback = "Интервью завершено: обнаружен читинг."
+
+        await self.session.commit()
+        return await self.find_interview_by_id(interview_id, None)
