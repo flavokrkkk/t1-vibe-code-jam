@@ -824,4 +824,6 @@ class InterviewService(BaseDbModelService[Interview]):
         self.session.add(message)
         await self.session.flush()
         await self.session.commit()
-        return await self.find_interview_by_id(interview_id, None)
+        
+        # Возвращаем только транскрибированный текст, как ожидает эндпоинт
+        return transcribed_text
