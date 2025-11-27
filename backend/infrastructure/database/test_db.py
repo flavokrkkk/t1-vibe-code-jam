@@ -559,13 +559,303 @@ async def init_test_db(session: AsyncSession):
         pass
 """
             ),
+            
+            # JavaScript задачи
+            CodeTask(
+                description="""**Two Sum (JavaScript)**
+
+Дан массив целых чисел `nums` и целое число `target`. Верните индексы двух чисел, которые в сумме дают `target`.
+
+Пример:
+- Input: nums = [2,7,11,15], target = 9
+- Output: [0,1]
+
+Класс должен называться Solution, метод - twoSum""",
+                difficulty="easy",
+                language="javascript",
+                topic="Arrays",
+                tags=["array", "hash-table", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[[2, 7, 11, 15], 9]", "expected_output": "[0,1]"},
+                        {"input": "[[3, 2, 4], 6]", "expected_output": "[1,2]"},
+                        {"input": "[[3, 3], 6]", "expected_output": "[0,1]"}
+                    ]
+                },
+                initial_code="""class Solution {
+    twoSum(nums, target) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Reverse String (JavaScript)**
+
+Напишите функцию, которая переворачивает строку. Входная строка дается в виде массива символов.
+
+Пример:
+- Input: s = ["h","e","l","l","o"]
+- Output: ["o","l","l","e","h"]
+
+Класс должен называться Solution, метод - reverseString""",
+                difficulty="easy",
+                language="javascript",
+                topic="String",
+                tags=["string", "two-pointers", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": '[[["h","e","l","l","o"]]]', "expected_output": '["o","l","l","e","h"]'},
+                        {"input": '[[["H","a","n","n","a","h"]]]', "expected_output": '["h","a","n","n","a","H"]'}
+                    ]
+                },
+                initial_code="""class Solution {
+    reverseString(s) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Valid Parentheses (JavaScript)**
+
+Дана строка `s`, содержащая только символы '(', ')', '{', '}', '[' и ']', определите, является ли входная строка валидной.
+
+Пример:
+- Input: s = "()"
+- Output: true
+
+Класс должен называться Solution, метод - isValid""",
+                difficulty="medium",
+                language="javascript",
+                topic="Stack",
+                tags=["stack", "string", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": '["()"]', "expected_output": "true"},
+                        {"input": '["()[]{}"]', "expected_output": "true"},
+                        {"input": '["(]"]', "expected_output": "false"}
+                    ]
+                },
+                initial_code="""class Solution {
+    isValid(s) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Palindrome Number (JavaScript)**
+
+Дано целое число `x`, верните `true`, если `x` является палиндромом.
+
+Пример:
+- Input: x = 121
+- Output: true
+
+Класс должен называться Solution, метод - isPalindrome""",
+                difficulty="easy",
+                language="javascript",
+                topic="Math",
+                tags=["math", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[121]", "expected_output": "true"},
+                        {"input": "[-121]", "expected_output": "false"},
+                        {"input": "[10]", "expected_output": "false"}
+                    ]
+                },
+                initial_code="""class Solution {
+    isPalindrome(x) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**FizzBuzz (JavaScript)**
+
+Дано целое число `n`, верните строковый массив где:
+- answer[i] == "FizzBuzz" если i делится на 3 и 5
+- answer[i] == "Fizz" если i делится на 3
+- answer[i] == "Buzz" если i делится на 5
+- answer[i] == i (в виде строки) в противном случае
+
+Пример:
+- Input: n = 5
+- Output: ["1","2","Fizz","4","Buzz"]
+
+Класс должен называться Solution, метод - fizzBuzz""",
+                difficulty="easy",
+                language="javascript",
+                topic="Math",
+                tags=["math", "string", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[3]", "expected_output": '["1","2","Fizz"]'},
+                        {"input": "[5]", "expected_output": '["1","2","Fizz","4","Buzz"]'},
+                        {"input": "[15]", "expected_output": '["1","2","Fizz","4","Buzz","Fizz","7","8","Fizz","Buzz","11","Fizz","13","14","FizzBuzz"]'}
+                    ]
+                },
+                initial_code="""class Solution {
+    fizzBuzz(n) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Maximum Subarray (JavaScript)**
+
+Дан целочисленный массив `nums`, найдите подмассив с наибольшей суммой и верните его сумму.
+
+Пример:
+- Input: nums = [-2,1,-3,4,-1,2,1,-5,4]
+- Output: 6
+
+Класс должен называться Solution, метод - maxSubArray""",
+                difficulty="medium",
+                language="javascript",
+                topic="Dynamic Programming",
+                tags=["array", "dynamic-programming", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[[-2,1,-3,4,-1,2,1,-5,4]]", "expected_output": "6"},
+                        {"input": "[[1]]", "expected_output": "1"},
+                        {"input": "[[5,4,-1,7,8]]", "expected_output": "23"}
+                    ]
+                },
+                initial_code="""class Solution {
+    maxSubArray(nums) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Contains Duplicate (JavaScript)**
+
+Дан массив `nums`, верните `true`, если какое-либо значение появляется как минимум дважды.
+
+Пример:
+- Input: nums = [1,2,3,1]
+- Output: true
+
+Класс должен nazywаться Solution, метод - containsDuplicate""",
+                difficulty="easy",
+                language="javascript",
+                topic="Arrays",
+                tags=["array", "hash-table", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[[1,2,3,1]]", "expected_output": "true"},
+                        {"input": "[[1,2,3,4]]", "expected_output": "false"}
+                    ]
+                },
+                initial_code="""class Solution {
+    containsDuplicate(nums) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Binary Search (JavaScript)**
+
+Дан отсортированный массив `nums` и целое число `target`. Найдите `target` в `nums` за O(log n).
+
+Пример:
+- Input: nums = [-1,0,3,5,9,12], target = 9
+- Output: 4
+
+Класс должен называться Solution, метод - search""",
+                difficulty="easy",
+                language="javascript",
+                topic="Binary Search",
+                tags=["array", "binary-search", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[[-1,0,3,5,9,12], 9]", "expected_output": "4"},
+                        {"input": "[[-1,0,3,5,9,12], 2]", "expected_output": "-1"}
+                    ]
+                },
+                initial_code="""class Solution {
+    search(nums, target) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Valid Anagram (JavaScript)**
+
+Даны две строки `s` и `t`, верните `true`, если `t` является анаграммой `s`.
+
+Пример:
+- Input: s = "anagram", t = "nagaram"
+- Output: true
+
+Класс должен называться Solution, метод - isAnagram""",
+                difficulty="easy",
+                language="javascript",
+                topic="String",
+                tags=["hash-table", "string", "sorting", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": '["anagram", "nagaram"]', "expected_output": "true"},
+                        {"input": '["rat", "car"]', "expected_output": "false"}
+                    ]
+                },
+                initial_code="""class Solution {
+    isAnagram(s, t) {
+        // Your code here
+    }
+}
+"""
+            ),
+            
+            CodeTask(
+                description="""**Move Zeroes (JavaScript)**
+
+Дан массив `nums`, переместите все 0 в конец, сохраняя порядок ненулевых элементов.
+
+Пример:
+- Input: nums = [0,1,0,3,12]
+- Output: [1,3,12,0,0]
+
+Класс должен называться Solution, метод - moveZeroes""",
+                difficulty="easy",
+                language="javascript",
+                topic="Arrays",
+                tags=["array", "two-pointers", "javascript"],
+                test_cases={
+                    "test_cases": [
+                        {"input": "[[0,1,0,3,12]]", "expected_output": "[1,3,12,0,0]"},
+                        {"input": "[[0]]", "expected_output": "[0]"}
+                    ]
+                },
+                initial_code="""class Solution {
+    moveZeroes(nums) {
+        // Your code here
+    }
+}
+"""
+            ),
         ]
         
         # Добавляем все задачи в сессию
         session.add_all(tasks)
         await session.commit()
         
-        logger.info(f"Успешно добавлено {len(tasks)} тестовых задач в БД")
+        logger.info(f"Успешно добавлено {len(tasks)} тестовых задач в БД (20 Python + 10 JavaScript)")
         
     except Exception as e:
         logger.error(f"Ошибка при инициализации тестовых данных: {e}", exc_info=True)
