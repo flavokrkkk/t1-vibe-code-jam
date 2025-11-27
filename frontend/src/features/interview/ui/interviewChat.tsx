@@ -275,6 +275,9 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
             sourceCode={currentCode}
             interviewId={initialInterview.id}
             stepId={currentStep?.id ?? ""}
+            codeTaskId={
+              currentStep?.code_task?.id ?? currentStep?.code_task_id ?? ""
+            }
           />
         </div>
       )}

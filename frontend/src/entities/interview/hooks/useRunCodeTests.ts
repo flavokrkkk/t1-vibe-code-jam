@@ -4,12 +4,22 @@ import { runCodeTests } from "../api/interviewService";
 interface RunCodeTestsParams {
   sourceCode: string;
   language: string;
-  testCases: Array<Record<string, any>>;
+  codeTaskId: string;
+}
+
+interface TestResult {
+  all_passed: boolean;
+  results: Array<{
+    passed: boolean;
+    status: string | null;
+    stdout: string;
+    stderr: string;
+    expected: string;
+  }>;
 }
 
 export const useRunCodeTests = () => {
-  return useMutation<string, Error, RunCodeTestsParams>({
+  return useMutation<TestResult, Error, RunCodeTestsParams>({
     mutationFn: runCodeTests,
   });
 };
-

@@ -6,6 +6,7 @@ import {
 } from "@/entities/interview/types/types";
 import { useRunCodeTests } from "@/entities/interview/hooks/useRunCodeTests";
 import { useSubmitCodeToStep } from "@/entities/interview/hooks/useSubmitCodeToStep";
+import { useSkipStep } from "@/entities/interview/hooks/useSkipStep";
 import { useState, useEffect } from "react";
 
 interface TestPanelProps {
@@ -19,6 +20,7 @@ interface TestPanelProps {
   language: string;
   interviewId: string;
   stepId: string;
+  codeTaskId: string;
 }
 
 export const TestPanel: React.FC<TestPanelProps> = ({
@@ -32,34 +34,41 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   language,
   interviewId,
   stepId,
+  codeTaskId,
 }) => {
   const activeCase = testCases.find((tc) => tc.id === activeTestId);
 
   const { mutate: runCodeTests, isPending: isRunningTests } = useRunCodeTests();
   const { mutate: submitCodeToStep, isPending: isSubmittingCode } =
     useSubmitCodeToStep();
+  const { mutate: skipStep, isPending: isSkippingStep } = useSkipStep();
 
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    all_passed: boolean;
+    results: Array<{
+      passed: boolean;
+      status: string | null;
+      stdout: string;
+      stderr: string;
+      expected: string;
+    }>;
+  } | null>(null);
 
-  const isLoading = isAILoading || isRunningTests || isSubmittingCode;
+  const isLoading =
+    isAILoading || isRunningTests || isSubmittingCode || isSkippingStep;
 
   useEffect(() => {
     setTestResult(null);
   }, [sourceCode, activeTestId]);
 
   const handleRunTests = () => {
-    if (!sourceCode || testCases.length === 0) return;
-
-    const testCasesForApi = testCases.map((tc) => ({
-      input: tc.input,
-      expected_output: tc.expected_output,
-    }));
+    if (!sourceCode || !codeTaskId) return;
 
     runCodeTests(
       {
         sourceCode,
         language,
-        testCases: testCasesForApi,
+        codeTaskId,
       },
       {
         onSuccess: (result) => {
@@ -67,7 +76,18 @@ export const TestPanel: React.FC<TestPanelProps> = ({
         },
         onError: (error) => {
           console.error("Error running tests:", error);
-          setTestResult(`Ошибка: ${error.message}`);
+          setTestResult({
+            all_passed: false,
+            results: [
+              {
+                passed: false,
+                status: "error",
+                stdout: "",
+                stderr: error.message,
+                expected: "",
+              },
+            ],
+          });
         },
       }
     );
@@ -88,6 +108,20 @@ export const TestPanel: React.FC<TestPanelProps> = ({
         },
         onError: (error) => {
           console.error("Error submitting code:", error);
+        },
+      }
+    );
+  };
+
+  const handleSkipStep = () => {
+    skipStep(
+      {
+        interviewId,
+        stepId,
+      },
+      {
+        onError: (error) => {
+          console.error("Error skipping step:", error);
         },
       }
     );
@@ -130,13 +164,77 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                 <h3 className="text-md font-semibold mb-2 text-indigo-700">
                   Test Result:
                 </h3>
-                <div className="bg-zinc-100 p-3 rounded-lg min-h-[70px] flex items-center border border-zinc-200">
+                <div className="bg-zinc-100 p-3 rounded-lg min-h-[70px] border border-zinc-200">
                   {testResult ? (
-                    <pre className="text-sm whitespace-pre-wrap">
-                      {testResult}
-                    </pre>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className={cn(
+                            "px-2 py-1 rounded text-xs font-medium",
+                            testResult.all_passed
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          )}
+                        >
+                          {testResult.all_passed
+                            ? "Все тесты пройдены"
+                            : "Тесты не пройдены"}
+                        </span>
+                        <span className="text-xs text-zinc-600">
+                          {testResult.results.filter((r) => r.passed).length} /{" "}
+                          {testResult.results.length} пройдено
+                        </span>
+                      </div>
+                      {(() => {
+                        const activeIndex = testCases.findIndex(
+                          (tc) => tc.id === activeTestId
+                        );
+                        if (
+                          activeIndex === -1 ||
+                          !testResult.results[activeIndex]
+                        ) {
+                          return null;
+                        }
+                        const result = testResult.results[activeIndex];
+
+                        return (
+                          <div
+                            className={cn(
+                              "p-2 rounded text-xs",
+                              result.passed
+                                ? "bg-green-50 border border-green-200"
+                                : "bg-red-50 border border-red-200"
+                            )}
+                          >
+                            <div className="font-medium mb-1">
+                              {result.passed ? "✓ Пройден" : "✗ Не пройден"}
+                            </div>
+                            {result.stderr && (
+                              <div className="text-red-600 mb-1">
+                                <span className="font-medium">Ошибка:</span>{" "}
+                                {result.stderr}
+                              </div>
+                            )}
+                            {result.stdout && (
+                              <div className="text-zinc-700 mb-1">
+                                <span className="font-medium">Вывод:</span>{" "}
+                                {result.stdout}
+                              </div>
+                            )}
+                            {result.expected && (
+                              <div className="text-zinc-600">
+                                <span className="font-medium">Ожидалось:</span>{" "}
+                                {result.expected}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   ) : (
-                    getResultDisplay(testResults[activeTestId])
+                    <div className="flex items-center h-full">
+                      {getResultDisplay(testResults[activeTestId])}
+                    </div>
                   )}
                 </div>
               </div>
@@ -167,30 +265,43 @@ export const TestPanel: React.FC<TestPanelProps> = ({
           </div>
         )}
 
-        <div className="flex space-x-2 justify-end text-right border-t absolute border-zinc-200 bg-zinc-50 w-full bottom-0 right-0 p-2">
+        <div className="flex space-x-2 justify-between items-center border-t absolute border-zinc-200 bg-zinc-50 w-full bottom-0 right-0 p-2">
           <button
-            onClick={handleRunTests}
-            disabled={isLoading || !sourceCode || testCases.length === 0}
+            onClick={handleSkipStep}
+            disabled={isLoading}
             className={cn(
               "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
-              "bg-white border text-blue-700 border-blue-700",
-              (isLoading || !activeCase || !sourceCode) &&
-                "cursor-not-allowed opacity-35"
+              "bg-zinc-500 hover:bg-zinc-700",
+              isLoading && "opacity-50 cursor-not-allowed bg-zinc-700"
             )}
           >
-            {isRunningTests ? "Running Tests..." : "Запустить тесты"}
+            {isSkippingStep ? "Пропуск..." : "Пропустить"}
           </button>
-          <button
-            onClick={handleSubmitCode}
-            disabled={isLoading || !sourceCode}
-            className={cn(
-              "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
-              "bg-blue-500 hover:bg-blue-700",
-              isLoading && "opacity-50 cursor-not-allowed bg-blue-700"
-            )}
-          >
-            {isSubmittingCode ? "Отправка..." : "Отправить код"}
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleRunTests}
+              disabled={isLoading || !sourceCode || !codeTaskId}
+              className={cn(
+                "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
+                "bg-white border text-blue-700 border-blue-700",
+                (isLoading || !activeCase || !sourceCode) &&
+                  "cursor-not-allowed opacity-35"
+              )}
+            >
+              {isRunningTests ? "Running Tests..." : "Запустить тесты"}
+            </button>
+            <button
+              onClick={handleSubmitCode}
+              disabled={isLoading || !sourceCode}
+              className={cn(
+                "px-6 py-2 rounded-3xl text-white font-medium transition-colors duration-200 cursor-pointer",
+                "bg-blue-500 hover:bg-blue-700",
+                isLoading && "opacity-50 cursor-not-allowed bg-blue-700"
+              )}
+            >
+              {isSubmittingCode ? "Отправка..." : "Отправить код"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ interface TaskCodeEditorProps {
   sourceCode: string;
   interviewId: string;
   stepId: string;
+  codeTaskId: string;
 }
 
 export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
@@ -30,6 +31,7 @@ export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
   sourceCode,
   interviewId,
   stepId,
+  codeTaskId,
 }) => {
   const {
     isCodeEditorMaximized,
@@ -100,6 +102,7 @@ export const TaskCodeEditor: React.FC<TaskCodeEditorProps> = ({
                 language={language}
                 interviewId={interviewId}
                 stepId={stepId}
+                codeTaskId={codeTaskId}
               />
             </div>
           )}

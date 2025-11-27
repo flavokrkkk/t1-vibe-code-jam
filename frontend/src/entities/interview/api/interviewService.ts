@@ -66,22 +66,40 @@ class InterviewService {
   public async runCodeTests({
     sourceCode,
     language,
-    testCases,
+    codeTaskId,
   }: {
     sourceCode: string;
     language: string;
-    testCases: Array<Record<string, any>>;
-  }): Promise<string> {
+    codeTaskId: string;
+  }): Promise<{
+    all_passed: boolean;
+    results: Array<{
+      passed: boolean;
+      status: string | null;
+      stdout: string;
+      stderr: string;
+      expected: string;
+    }>;
+  }> {
     try {
       return await authApiLongTimeout
         .post("code/run", {
           json: {
             source_code: sourceCode,
             language: language,
-            test_cases: testCases,
+            code_task_id: codeTaskId,
           },
         })
-        .json<string>();
+        .json<{
+          all_passed: boolean;
+          results: Array<{
+            passed: boolean;
+            status: string | null;
+            stdout: string;
+            stderr: string;
+            expected: string;
+          }>;
+        }>();
     } catch (error) {
       console.error("Error running code tests:", error);
       throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
@@ -109,6 +127,28 @@ class InterviewService {
     } catch (error) {
       console.error(
         `Error submitting code for interview ${interviewId}, step ${stepId}:`,
+        error
+      );
+      throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
+    }
+  }
+
+  public async skipStep({
+    interviewId,
+    stepId,
+  }: {
+    interviewId: string;
+    stepId: string;
+  }): Promise<Interview> {
+    try {
+      return await authApiLongTimeout
+        .post(
+          `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/steps/${stepId}/skip`
+        )
+        .json<Interview>();
+    } catch (error) {
+      console.error(
+        `Error skipping step for interview ${interviewId}, step ${stepId}:`,
         error
       );
       throw new Error(ErrorMessages.REQUEST_PREPARATION_ERROR);
@@ -185,6 +225,58 @@ class InterviewService {
       );
     }
   }
+
+  public async banInterview({
+    interviewId,
+    reasons,
+  }: {
+    interviewId: string;
+    reasons: string[];
+  }): Promise<Interview> {
+    try {
+      return await authApi
+        .post(`${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/ban`, {
+          json: { reasons },
+        })
+        .json<Interview>();
+    } catch (error) {
+      console.error(`Error banning interview ${interviewId}:`, error);
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : ErrorMessages.REQUEST_PREPARATION_ERROR
+      );
+    }
+  }
+
+  public async updateInterviewResult({
+    interviewId,
+    resultUrl,
+  }: {
+    interviewId: string;
+    resultUrl: string;
+  }): Promise<Interview> {
+    try {
+      return await authApi
+        .post(
+          `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/result`,
+          {
+            json: { result_url: resultUrl },
+          }
+        )
+        .json<Interview>();
+    } catch (error) {
+      console.error(
+        `Error updating interview result for interview ${interviewId}:`,
+        error
+      );
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : ErrorMessages.REQUEST_PREPARATION_ERROR
+      );
+    }
+  }
 }
 
 export const {
@@ -193,7 +285,10 @@ export const {
   getInterviewById,
   runCodeTests,
   submitCode,
+  skipStep,
   sendChatMessage,
   sendAudioMessage,
   claimInterview,
+  banInterview,
+  updateInterviewResult,
 } = new InterviewService();

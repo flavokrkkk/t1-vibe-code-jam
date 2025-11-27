@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { useAntiCheatDetection } from "./useAntiCheatDetection";
-import { getWarnings, addWarning } from "./storage";
+import { getWarnings, addWarning, addViolation } from "./storage";
 import type { AntiCheatViolation, AntiCheatWarning } from "./types";
 import {
   Dialog,
@@ -41,6 +41,9 @@ export const AntiCheatProvider: React.FC<AntiCheatProviderProps> = ({
 
       const newWarningCount = addWarning(interviewId);
       setWarnings(newWarningCount);
+
+      // Сохраняем нарушение в хранилище
+      addViolation(interviewId, violation);
 
       const warning: AntiCheatWarning = {
         violation,

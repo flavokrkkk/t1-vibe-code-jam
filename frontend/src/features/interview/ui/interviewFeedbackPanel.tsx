@@ -7,13 +7,18 @@ import {
   SelectValue,
 } from "@/shared/ui/select/select";
 import React, { useMemo, useState } from "react";
+import { useSendInterviewViolations } from "../hooks/useSendInterviewViolations";
 
 interface FeedbackPanelProps {
   interview: Interview;
 }
 
 const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ interview }) => {
-  const [selectStepId, setSelectStepId] = useState(interview.steps[0].id);
+  const [selectStepId, setSelectStepId] = useState(
+    interview.steps[0]?.id || ""
+  );
+
+  useSendInterviewViolations(interview.id);
 
   const currentStep = useMemo(() => {
     return interview.steps.find((step) => step.id === selectStepId);

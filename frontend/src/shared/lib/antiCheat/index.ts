@@ -6,5 +6,8 @@ export {
   clearWarnings,
   hasReachedMaxWarnings,
   MAX_WARNINGS_COUNT,
+  addViolation,
+  getViolations,
+  clearViolations,
 } from "./storage";
 export { hasAcceptedRules, setRulesAccepted } from "./rulesStorage";
