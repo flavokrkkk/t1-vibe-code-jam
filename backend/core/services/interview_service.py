@@ -410,15 +410,15 @@ class InterviewService(BaseDbModelService[Interview]):
         await self._update_current_step(interview, ml_response, text)
 
         # Добавляем feedback от ML в чат (если есть)
-        feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
-        if feedback_text:
-            feedback_message = ChatMessage(
-                interview_id=interview.id,
-                sender=MessageSender.AI,
-                text=feedback_text,
-            )
-            self.session.add(feedback_message)
-            await self.session.flush()
+        # feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
+        # if feedback_text:
+        #     feedback_message = ChatMessage(
+        #         interview_id=interview.id,
+        #         sender=MessageSender.AI,
+        #         text=feedback_text,
+        #     )
+        #     self.session.add(feedback_message)
+        #     await self.session.flush()
 
         status = ml_response.get("status", "IN_PROGRESS")
 
@@ -691,16 +691,16 @@ class InterviewService(BaseDbModelService[Interview]):
         current_step.feedback = ml_response.get("feedback")
         current_step.score = ml_response.get("score")
 
-        # Добавляем feedback от ML в чат
-        feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
-        if feedback_text:
-            feedback_message = ChatMessage(
-                interview_id=interview.id,
-                sender=MessageSender.AI,
-                text=feedback_text,
-            )
-            self.session.add(feedback_message)
-            await self.session.flush()
+        # # Добавляем feedback от ML в чат
+        # feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
+        # if feedback_text:
+        #     feedback_message = ChatMessage(
+        #         interview_id=interview.id,
+        #         sender=MessageSender.AI,
+        #         text=feedback_text,
+        #     )
+        #     self.session.add(feedback_message)
+        #     await self.session.flush()
 
         status = ml_response.get("status", "IN_PROGRESS")
         if status != "COMPLETED":
@@ -742,15 +742,15 @@ class InterviewService(BaseDbModelService[Interview]):
         current_step.feedback = ml_response.get("feedback")
 
         # Добавляем feedback от ML в чат
-        feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
-        if feedback_text:
-            feedback_message = ChatMessage(
-                interview_id=interview.id,
-                sender=MessageSender.AI,
-                text=feedback_text,
-            )
-            self.session.add(feedback_message)
-            await self.session.flush()
+        # feedback_text = ml_response.get("feedback") or ml_response.get("ai_feedback")
+        # if feedback_text:
+        #     feedback_message = ChatMessage(
+        #         interview_id=interview.id,
+        #         sender=MessageSender.AI,
+        #         text=feedback_text,
+        #     )
+        #     self.session.add(feedback_message)
+        #     await self.session.flush()
 
         status = ml_response.get("status", "IN_PROGRESS")
         if status != "COMPLETED":
