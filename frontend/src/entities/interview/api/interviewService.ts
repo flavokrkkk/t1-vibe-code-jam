@@ -258,7 +258,7 @@ class InterviewService {
   }): Promise<Interview> {
     try {
       return await authApi
-        .post(
+        .patch(
           `${EInterviewEndpoints.INTERVIEWS_CREATE}/${interviewId}/result`,
           {
             json: { result_url: resultUrl },

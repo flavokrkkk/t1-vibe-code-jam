@@ -1,5 +1,6 @@
 import React from "react";
 import { Interview } from "@/entities/interview/types/types";
+import { useCurrentUser } from "@/entities/user/hooks/useCurrentUser";
 import {
   Page,
   Text,
@@ -132,6 +133,8 @@ interface InterviewReportProps {
 }
 
 const InterviewReport: React.FC<InterviewReportProps> = ({ interview }) => {
+  const { data: currentUser } = useCurrentUser();
+
   const dialogSteps = interview.steps.filter((step) => step.type === "DIALOG");
   const codeTaskSteps = interview.steps.filter(
     (step) => step.type === "CODE_TASK"
@@ -155,6 +158,25 @@ const InterviewReport: React.FC<InterviewReportProps> = ({ interview }) => {
         <View style={styles.headerContainer}>
           <Text style={styles.headerText}>Отчет о результатах интервью</Text>
         </View>
+
+        {currentUser && (
+          <View style={styles.section}>
+            <Text style={styles.text}>
+              <Text style={styles.label}>Кандидат:</Text>{" "}
+              {sanitize(currentUser.username)}
+            </Text>
+            <Text style={styles.text}>
+              <Text style={styles.label}>Email:</Text>{" "}
+              {sanitize(currentUser.email)}
+            </Text>
+            {currentUser.created_at && (
+              <Text style={styles.text}>
+                <Text style={styles.label}>Дата регистрации:</Text>{" "}
+                {formatDate(currentUser.created_at)}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.text}>

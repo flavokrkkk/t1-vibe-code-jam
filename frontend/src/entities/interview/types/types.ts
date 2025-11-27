@@ -61,6 +61,9 @@ export type Interview = {
   key_skills: string[]; // Массив ключевых навыков
   preferences: string; // Предпочтения пользователя
   public_token: string; // Публичный токен для доступа к интервью (URL)
+  ban_reasons?: string[] | null;
+  banned_at?: string | null;
+  result_url?: string | null;
 };
 
 export interface TestCase {

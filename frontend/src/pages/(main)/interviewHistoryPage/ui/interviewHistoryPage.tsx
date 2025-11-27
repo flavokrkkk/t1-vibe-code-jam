@@ -52,6 +52,8 @@ const InterviewHistoryPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>("my");
   const { data: interviews = [], isLoading } = useGetAllInterview();
   const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
+  const [expandedCheatingByInterviewId, setExpandedCheatingByInterviewId] =
+    useState<Record<string, boolean>>({});
 
   const { myInterviews, sharedInterviews } = useMemo(() => {
     if (!currentUser) {
@@ -236,6 +238,15 @@ const InterviewHistoryPage = () => {
 
                   const buttonText = isCompleted ? "Посмотреть" : "Продолжить";
 
+                  const hasCheatingWarnings =
+                    Array.isArray(interview.ban_reasons) &&
+                    interview.ban_reasons.length > 0;
+
+                  const hasResultReport = !!interview.result_url;
+
+                  const isCheatingExpanded =
+                    expandedCheatingByInterviewId[interview.id] ?? false;
+
                   const handleButtonClick = () => {
                     if (isMyInterview && !isCompleted) {
                       navigate(
@@ -288,7 +299,7 @@ const InterviewHistoryPage = () => {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
                           <div className="bg-blue-100 rounded-2xl p-4 text-center">
                             <p className="text-2xl font-bold text-blue-600">
                               {interview.chat_messages?.length ??
@@ -306,6 +317,76 @@ const InterviewHistoryPage = () => {
                             </div>
                           )}
                         </div>
+
+                        {(hasCheatingWarnings || hasResultReport) && (
+                          <div className="mb-4 flex flex-col gap-3">
+                            {hasCheatingWarnings && (
+                              <div className="rounded-2xl border border-red-100 bg-red-50/80 p-3">
+                                <p className="text-xs font-semibold text-red-700 mb-1 flex items-center gap-1.5">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  Анти‑чит предупреждения
+                                </p>
+                                <ul className="space-y-0.5 max-h-24 overflow-y-auto pr-1">
+                                  {(isCheatingExpanded
+                                    ? interview.ban_reasons ?? []
+                                    : (interview.ban_reasons ?? []).slice(0, 3)
+                                  ).map((reason: string) => (
+                                    <li
+                                      key={reason}
+                                      className="text-[11px] text-red-800/90"
+                                    >
+                                      • {reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                                {(interview.ban_reasons?.length ?? 0) > 3 && (
+                                  <button
+                                    type="button"
+                                    className="mt-2 text-[11px] font-medium text-red-700 hover:text-red-800 cursor-pointer"
+                                    onClick={() =>
+                                      setExpandedCheatingByInterviewId(
+                                        (prev) => ({
+                                          ...prev,
+                                          [interview.id]: !isCheatingExpanded,
+                                        })
+                                      )
+                                    }
+                                  >
+                                    {isCheatingExpanded
+                                      ? "Свернуть"
+                                      : `Показать все (${
+                                          interview.ban_reasons?.length ?? 0
+                                        })`}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {hasResultReport && (
+                              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-3 flex flex-col justify-between">
+                                <div>
+                                  <p className="text-xs font-semibold text-blue-800 mb-1">
+                                    PDF‑отчет по интервью
+                                  </p>
+                                  <p className="text-[11px] text-blue-900/80">
+                                    Сохранённый файл с подробным результатом и
+                                    фидбэком.
+                                  </p>
+                                </div>
+                                <div className="mt-2">
+                                  <a
+                                    href={interview.result_url ?? undefined}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center rounded-xl bg-white px-3 py-1.5 text-[11px] font-medium text-blue-700 shadow-sm border border-blue-100 hover:bg-blue-50 transition-colors cursor-pointer"
+                                  >
+                                    Открыть PDF
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between">
                           <TagChip

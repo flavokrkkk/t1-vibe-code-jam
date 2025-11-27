@@ -5,7 +5,6 @@ import {
   TestCase,
 } from "@/entities/interview/types/types";
 import { useRunCodeTests } from "@/entities/interview/hooks/useRunCodeTests";
-import { useSubmitCodeToStep } from "@/entities/interview/hooks/useSubmitCodeToStep";
 import { useSkipStep } from "@/entities/interview/hooks/useSkipStep";
 import { useState, useEffect } from "react";
 
@@ -39,8 +38,6 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   const activeCase = testCases.find((tc) => tc.id === activeTestId);
 
   const { mutate: runCodeTests, isPending: isRunningTests } = useRunCodeTests();
-  const { mutate: submitCodeToStep, isPending: isSubmittingCode } =
-    useSubmitCodeToStep();
   const { mutate: skipStep, isPending: isSkippingStep } = useSkipStep();
 
   const [testResult, setTestResult] = useState<{
@@ -54,8 +51,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
     }>;
   } | null>(null);
 
-  const isLoading =
-    isAILoading || isRunningTests || isSubmittingCode || isSkippingStep;
+  const isLoading = isAILoading || isRunningTests || isSkippingStep;
 
   useEffect(() => {
     setTestResult(null);
@@ -96,21 +92,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   const handleSubmitCode = () => {
     if (!sourceCode) return;
 
-    submitCodeToStep(
-      {
-        interviewId,
-        stepId,
-        userCode: sourceCode,
-      },
-      {
-        onSuccess: () => {
-          onRunTests();
-        },
-        onError: (error) => {
-          console.error("Error submitting code:", error);
-        },
-      }
-    );
+    onRunTests();
   };
 
   const handleSkipStep = () => {
@@ -244,7 +226,40 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   Expected Output:
                 </h3>
                 <div className="bg-zinc-100 p-3 rounded-lg font-mono text-sm overflow-x-auto border border-zinc-200 text-zinc-800">
-                  <pre>{JSON.stringify(activeCase.expected_output)}</pre>
+                  {(() => {
+                    const formattedExpected =
+                      typeof activeCase.expected_output === "string"
+                        ? activeCase.expected_output
+                        : JSON.stringify(activeCase.expected_output, null, 2);
+
+                    const activeIndex = testCases.findIndex(
+                      (tc) => tc.id === activeTestId
+                    );
+                    const runnerExpected =
+                      testResult && activeIndex !== -1
+                        ? testResult.results[activeIndex]?.expected
+                        : null;
+
+                    return (
+                      <>
+                        <div className="mb-2">
+                          <div className="text-xs text-zinc-500 mb-1">
+                            Эталонное ожидаемое значение из тесткейса:
+                          </div>
+                          <pre>{formattedExpected}</pre>
+                        </div>
+                        {runnerExpected &&
+                          runnerExpected !== formattedExpected && (
+                            <div className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-700">
+                              <div className="font-semibold mb-1">
+                                Ожидалось по результатам прогона:
+                              </div>
+                              <pre>{runnerExpected}</pre>
+                            </div>
+                          )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -253,15 +268,6 @@ export const TestPanel: React.FC<TestPanelProps> = ({
           <div className="text-gray-500 text-center py-8 h-full flex flex-col justify-center items-center">
             <p className="mb-1">Тестовый случай не выбран.</p>
             <p>Пожалуйста, выберите тестовый случай или добавьте новый.</p>
-            {/* <button
-              disabled={isAILoading}
-              className={cn(
-                "mt-4 px-4 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-3xl",
-                isAILoading && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              Добавить первый тестовый случай
-            </button> */}
           </div>
         )}
 
@@ -299,7 +305,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                 isLoading && "opacity-50 cursor-not-allowed bg-blue-700"
               )}
             >
-              {isSubmittingCode ? "Отправка..." : "Отправить код"}
+              {isAILoading ? "Отправка..." : "Отправить код"}
             </button>
           </div>
         </div>

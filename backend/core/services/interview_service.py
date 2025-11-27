@@ -252,7 +252,7 @@ class InterviewService(BaseDbModelService[Interview]):
                 text=message_text,
             )
             self.session.add(message)
-        
+
         # Для CODE_TASK тоже добавляем описание задачи в чат
         if step_type == "CODE_TASK" and step.question_text:
             task_message = ChatMessage(
@@ -589,7 +589,9 @@ class InterviewService(BaseDbModelService[Interview]):
             current_step.score = ml_response.get("score")
             await self.session.flush()
 
-    async def run_playground_code(self, code: str, language: str, code_task_id: UUID) -> dict:
+    async def run_playground_code(
+        self, code: str, language: str, code_task_id: UUID
+    ) -> dict:
         """
         Запускает код в playground режиме с тестами из БД.
         Берет тесты из CodeTask по ID и прогоняет через Judge0.
@@ -599,12 +601,14 @@ class InterviewService(BaseDbModelService[Interview]):
             select(CodeTask).where(CodeTask.id == code_task_id)
         )
         code_task = result.scalar_one_or_none()
-        
+
         if not code_task:
             raise NotFoundException(f"Задача с ID {code_task_id} не найдена")
-        
-        test_cases = code_task.test_cases if isinstance(code_task.test_cases, list) else []
-        
+
+        test_cases = (
+            code_task.test_cases if isinstance(code_task.test_cases, list) else []
+        )
+
         return await self.judge0_client.run_tests(code, language, test_cases)
 
     async def submit_code(
@@ -900,24 +904,18 @@ class InterviewService(BaseDbModelService[Interview]):
         interview_id: UUID,
         reasons: list[str],
     ) -> Interview:
-        """Банит интервью за читинг с указанием причин."""
+        """
+        Фиксирует факт читинга и причины, не меняя статус интервью на BANNED.
+
+        Важно: мы намеренно НЕ трогаем поле status, чтобы не блокировать интервью
+        и не переводить его в отдельное состояние BANNED.
+        """
         interview = await self.find_interview_by_id(interview_id, None)
 
-        if interview.status == InterviewStatus.BANNED:
-            raise BadRequestException("Интервью уже забанено.")
-
-        # Устанавливаем статус BANNED
-        interview.status = InterviewStatus.BANNED
         interview.ban_reasons = reasons
         from datetime import datetime, timezone
 
         interview.banned_at = datetime.now(timezone.utc)
-
-        # Завершаем все активные шаги
-        for step in interview.steps:
-            if step.status == InterviewStepStatus.IN_PROGRESS:
-                step.status = InterviewStepStatus.COMPLETED
-                step.feedback = "Интервью завершено: обнаружен читинг."
 
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)
@@ -929,8 +927,8 @@ class InterviewService(BaseDbModelService[Interview]):
     ) -> Interview:
         """Обновляет ссылку на PDF с результатами интервью."""
         interview = await self.find_interview_by_id(interview_id, None)
-        
+
         interview.result_url = result_url
-        
+
         await self.session.commit()
         return await self.find_interview_by_id(interview_id, None)

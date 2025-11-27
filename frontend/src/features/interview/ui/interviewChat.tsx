@@ -12,6 +12,7 @@ import { FileText } from "lucide-react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { Button } from "@/shared/ui/button/button";
 import InterviewReport from "./interviewReport";
+import { useUploadInterviewReport } from "../hooks/useUploadInterviewReport";
 import { motion } from "framer-motion";
 import { TypingIndicator } from "./typingIndicator";
 import { Image } from "@/shared/ui/image/image";
@@ -22,6 +23,7 @@ import {
   useInterviewTimer,
   useTypingIndicator,
 } from "../hooks/useInterviewChat";
+import { useCurrentUser } from "@/entities/user/hooks/useCurrentUser";
 
 interface InterviewChatProps {
   initialInterview: Interview;
@@ -30,6 +32,7 @@ interface InterviewChatProps {
 export const InterviewChat: React.FC<InterviewChatProps> = ({
   initialInterview,
 }) => {
+  const { data: currentUser } = useCurrentUser();
   const currentStep =
     initialInterview.steps[initialInterview.current_step_index];
 
@@ -44,9 +47,10 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
     useInterviewMessage();
 
   const { mutate: submitCode, isPending: isSubmittingCode } = useCodeSubmit();
+  const { uploadInterviewReport, isUploading } = useUploadInterviewReport();
 
   const isInterviewCompleted = useInterviewCompleted(initialInterview);
-  const isAILoading = isSendingMessage || isSubmittingCode;
+  const isAILoading = isSendingMessage || isSubmittingCode || isUploading;
   const { formatted: formattedElapsedTime } = useInterviewTimer(
     initialInterview,
     isInterviewCompleted
@@ -103,11 +107,21 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
       <div className="flex-grow flex bg-white flex-col z-10 rounded-3xl w-full items-center">
         <div className="flex flex-col bg-[#3d66ff] transition-colors ease-in-out rounded-t-[22px] w-full">
           <div className="flex items-center justify-between px-5 py-2 gap-4">
-            <div className="flex gap-3 flex-1 min-w-0">
-              <span className="text-[17px] font-medium truncate pb-[2px]">
-                {initialInterview.job_role_description}
-              </span>
-              <div className="flex items-center gap-3 text-[11px] text-zinc-100/90">
+            <div className="flex gap-3 flex-1 min-w-0 flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col min-w-0">
+                <span className="text-[17px] font-medium truncate pb-[2px]">
+                  {initialInterview.job_role_description}
+                </span>
+                {currentUser?.username && (
+                  <span className="text-[11px] text-zinc-100/90 truncate">
+                    Кандидат:{" "}
+                    <span className="font-semibold">
+                      {currentUser.username}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-zinc-100/90 mt-1 sm:mt-0">
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
                   <span className="uppercase tracking-wide">Интервью</span>
@@ -129,7 +143,7 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
                   "flex items-center space-x-1 w-full sm:w-auto rounded-xl",
                   "text-white text-[13px] p-2 px-4",
                   "hover:bg-white/30 font-medium",
-                  "bg-white/20 border border-white/30",
+                  "bg-white/20 border-white/30",
                   "focus:ring-1 focus:ring-white/50",
                   "transition-all duration-200"
                 )}
@@ -142,12 +156,47 @@ export const InterviewChat: React.FC<InterviewChatProps> = ({
                     30
                   )}_${new Date().toISOString().split("T")[0]}.pdf`}
                 >
-                  {({ loading }) => (
-                    <>
-                      <FileText className="w-4 h-4" />
-                      <span>{loading ? "Генерация..." : "Скачать отчет"}</span>
-                    </>
-                  )}
+                  {({ blob, url, loading }) => {
+                    const href = typeof url === "string" ? url : undefined;
+                    const fileName = `Interview_${initialInterview.job_role_description.slice(
+                      0,
+                      30
+                    )}_${new Date().toISOString().split("T")[0]}.pdf`;
+
+                    const handleClick = async () => {
+                      if (!blob || isUploading) return;
+
+                      try {
+                        await uploadInterviewReport({
+                          interviewId: initialInterview.id,
+                          file: blob,
+                          fileName,
+                        });
+                      } catch (error) {
+                        // eslint-disable-next-line no-console
+                        console.error(
+                          "Failed to upload interview report before download",
+                          error
+                        );
+                      }
+                    };
+
+                    return (
+                      <a
+                        href={href}
+                        download={fileName}
+                        onClick={handleClick}
+                        className="flex items-center space-x-1"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>
+                          {loading || isUploading
+                            ? "Генерация..."
+                            : "Скачать отчет"}
+                        </span>
+                      </a>
+                    );
+                  }}
                 </PDFDownloadLink>
               </Button>
             )}
