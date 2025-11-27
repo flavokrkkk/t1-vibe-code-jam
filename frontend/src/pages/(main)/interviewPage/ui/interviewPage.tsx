@@ -46,7 +46,7 @@ const InterviewPage = () => {
   const isAntiCheatEnabled = rulesAccepted && !isInterviewCompleted;
 
   return (
-    <AntiCheatProvider interviewId={interview.id} enabled={isAntiCheatEnabled}>
+    <AntiCheatProvider interviewId={interview.id} enabled={false}>
       <AntiCheatRulesDialog
         open={showRulesDialog}
         onOpenChange={setShowRulesDialog}
