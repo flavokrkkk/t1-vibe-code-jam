@@ -191,13 +191,15 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 - Статус: **не завершай, пока не будет подтверждения**
 
-### ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ ВАКАНСИЙ DEVELOPER:
+### ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ ВСЕХ ИНТЕРВЬЮ:
 
-- **Если в названии позиции указано "developer"** (в любом регистре), то **ОБЯЗАТЕЛЬНО** должен быть **минимум один шаг с типом `{InterviewStepType["CODE_TASK"]}`** в ходе интервью.
+- **ОБЯЗАТЕЛЬНО должен быть минимум один шаг с типом `{InterviewStepType["CODE_TASK"]}`** в ходе интервью.
 
 - Это правило имеет **высший приоритет** — даже если все остальные шаги диалоговые, **минимум один** должен быть кодовая задача.
 
 - **Используй CODE_TASK активно** — если кандидат показал базовые знания, дай ему кодовую задачу для проверки практических навыков. Особенно после 2-3 диалоговых вопросов.
+
+- **КРИТИЧЕСКИ ВАЖНО**: Если до последнего шага не было ни одной CODE_TASK, то последний шаг **ОБЯЗАТЕЛЬНО** должен быть CODE_TASK.
 
 - **В answerText НЕ ДУБЛИРУЙ feedback** — answerText должен быть кратким комментарием (1-2 предложения), а feedback — детальным анализом. Они должны быть разными!
 
@@ -301,6 +303,7 @@ class InterviewAgent:
         self.questions_asked = 0
         self.negative_answers_count = 0
         self.waiting_for_completion_confirmation = False
+        self.has_code_task = False
 
     def _get_messages_with_history(self, user_input: str) -> list:
         """Создание списка сообщений с полной историей для диалогового режима."""
@@ -450,6 +453,7 @@ class InterviewAgent:
             
             next_step_data = None
             if next_step_type == InterviewStepType["CODE_TASK"]:
+                self.has_code_task = True
                 code_task = next_step.get("codeTask", {})
                 next_step_data = {
                     "type": "CODE_TASK",
@@ -555,6 +559,7 @@ class InterviewAgent:
             
             next_step_data = None
             if next_step_type == InterviewStepType["CODE_TASK"]:
+                self.has_code_task = True
                 code_task = next_step.get("codeTask", {})
                 next_step_data = {
                     "type": "CODE_TASK",
@@ -685,6 +690,7 @@ class InterviewAgent:
                 
                 next_step_data = None
                 if next_step_type == InterviewStepType["CODE_TASK"]:
+                    self.has_code_task = True
                     code_task = next_step.get("codeTask", {})
                     topic = code_task.get("topic", "Python")
                     difficulty = code_task.get("difficulty", "medium")
@@ -885,6 +891,7 @@ class InterviewAgent:
             full_code_task = None
             
             if next_step_type == InterviewStepType["CODE_TASK"]:
+                self.has_code_task = True
                 code_task = next_step.get("codeTask", {})
                 topic = code_task.get("topic", "Python")
                 difficulty = code_task.get("difficulty", "medium")
@@ -981,6 +988,7 @@ class InterviewAgent:
                             
                             full_code_task = None
                             if follow_up_next_step_type == InterviewStepType["CODE_TASK"]:
+                                self.has_code_task = True
                                 code_task = follow_up_next_step.get("codeTask", {})
                                 topic = code_task.get("topic", "Python")
                                 difficulty = code_task.get("difficulty", "medium")
