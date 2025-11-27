@@ -252,6 +252,15 @@ class InterviewService(BaseDbModelService[Interview]):
                 text=message_text,
             )
             self.session.add(message)
+        
+        # Для CODE_TASK тоже добавляем описание задачи в чат
+        if step_type == "CODE_TASK" and step.question_text:
+            task_message = ChatMessage(
+                interview_id=interview.id,
+                sender=MessageSender.AI,
+                text=step.question_text,
+            )
+            self.session.add(task_message)
 
         # Очищаем pending_next_step, так как мы его использовали
         interview.pending_next_step = None
