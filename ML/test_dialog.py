@@ -11,7 +11,7 @@ def start_interview():
     """Начало интервью."""
     print("=== Начало интервью ===\n")
     
-    job_title = input("Название вакансии: ").strip() or "Python Developer"
+    job_role_description = input("Название вакансии: ").strip() or "Python Developer"
     skills_input = input("Навыки (через запятую): ").strip() or "Python, FastAPI, SQL"
     required_skills = [s.strip() for s in skills_input.split(",")]
     amount_of_tasks = input("Количество вопросов (по умолчанию 5): ").strip() or "5"
@@ -22,7 +22,7 @@ def start_interview():
     except ValueError:
         amount_of_tasks = 5
     
-    print(f"\nНачинаем интервью на позицию: {job_title}")
+    print(f"\nНачинаем интервью на позицию: {job_role_description}")
     print(f"Навыки: {', '.join(required_skills)}")
     print(f"Количество вопросов: {amount_of_tasks}")
     if preferences:
@@ -31,7 +31,7 @@ def start_interview():
     print("-" * 60)
     
     payload = {
-        "job_title": job_title,
+        "job_role_description": job_role_description,
         "required_skills": required_skills,
         "amount_of_tasks": amount_of_tasks
     }

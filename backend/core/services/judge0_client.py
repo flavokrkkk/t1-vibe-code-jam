@@ -36,8 +36,28 @@ class Judge0Client:
         
         if language == "python":
             # Для Python формируем код с вызовом метода Solution
-            # Используем json.dumps для безопасной вставки данных
-            test_input_repr = json_lib.dumps(test_input)
+            # Обрабатываем различные форматы test_input
+            parsed_input = test_input
+            
+            if isinstance(test_input, str):
+                # Пробуем распарсить как JSON
+                try:
+                    parsed_input = json_lib.loads(test_input)
+                except json_lib.JSONDecodeError:
+                    # Если не валидный JSON, пробуем исправить "[1,2,3], 9" -> [[1,2,3], 9]
+                    if ',' in test_input and not test_input.startswith('['):
+                        # Простой случай: "arg1, arg2" -> [arg1, arg2]
+                        try:
+                            parsed_input = json_lib.loads(f"[{test_input}]")
+                        except:
+                            # Если не получилось - оставляем как строку
+                            parsed_input = test_input
+                    else:
+                        # Оставляем как строку
+                        parsed_input = test_input
+            
+            # Сериализуем для безопасной вставки в код
+            test_input_repr = json_lib.dumps(parsed_input)
             
             wrapper_code = """
 # Test execution wrapper
@@ -46,7 +66,7 @@ import json
 
 if __name__ == "__main__":
     try:
-        # Входные данные из теста
+        # Входные данные из теста (уже распарсены из JSON)
         test_input = json.loads(TEST_INPUT_DATA)
         
         # Создаем экземпляр Solution
@@ -66,35 +86,23 @@ if __name__ == "__main__":
         method = getattr(sol, method_name)
         result = None
         
-        # Если input пустой - вызываем без параметров
-        if not test_input or not test_input.strip():
+        # Проверяем тип входных данных
+        if test_input is None or test_input == "" or test_input == []:
+            # Пустой input - вызываем без параметров
             result = method()
-        else:
-            # Пробуем распарсить как JSON
+        elif isinstance(test_input, dict):
+            # Dict с именованными параметрами: {"nums": [1,2,3], "target": 9}
             try:
-                input_data = json.loads(test_input)
-                
-                # Если input_data - это dict с именованными параметрами
-                if isinstance(input_data, dict):
-                    # Проверяем, есть ли в dict специальные ключи для аргументов
-                    # Например: {"nums": [1,2,3], "target": 9}
-                    try:
-                        result = method(**input_data)
-                    except TypeError:
-                        # Если не подошло, пробуем передать весь dict как один аргумент
-                        result = method(input_data)
-                        
-                # Если input_data - это list с позиционными аргументами
-                elif isinstance(input_data, list):
-                    result = method(*input_data)
-                    
-                # Иначе передаем как единственный аргумент
-                else:
-                    result = method(input_data)
-                    
-            except (json.JSONDecodeError, TypeError) as e:
-                # Если не JSON или ошибка типа - передаем как строку
-                result = method(test_input.strip())
+                result = method(**test_input)
+            except TypeError:
+                # Если не подошло, пробуем передать весь dict как один аргумент
+                result = method(test_input)
+        elif isinstance(test_input, list):
+            # List с позиционными аргументами: [[1,2,3], 9]
+            result = method(*test_input)
+        else:
+            # Примитивный тип (str, int, etc.) - передаем как единственный аргумент
+            result = method(test_input)
         
         # Выводим результат
         if result is None:

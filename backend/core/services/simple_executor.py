@@ -160,7 +160,7 @@ import json
 
 if __name__ == "__main__":
     try:
-        # Входные данные из теста
+        # Входные данные из теста (уже распарсены из JSON)
         test_input = json.loads(TEST_INPUT_DATA)
         
         # Создаем экземпляр Solution
@@ -180,32 +180,23 @@ if __name__ == "__main__":
         method = getattr(sol, method_name)
         result = None
         
-        # Если input пустой - вызываем без параметров
-        if not test_input or not test_input.strip():
+        # Проверяем тип входных данных
+        if test_input is None or test_input == "" or test_input == []:
+            # Пустой input - вызываем без параметров
             result = method()
-        else:
-            # Пробуем распарсить как JSON
+        elif isinstance(test_input, dict):
+            # Dict с именованными параметрами: {"nums": [1,2,3], "target": 9}
             try:
-                input_data = json.loads(test_input)
-                
-                # Если input_data - это dict с именованными параметрами
-                if isinstance(input_data, dict):
-                    try:
-                        result = method(**input_data)
-                    except TypeError:
-                        result = method(input_data)
-                        
-                # Если input_data - это list с позиционными аргументами
-                elif isinstance(input_data, list):
-                    result = method(*input_data)
-                    
-                # Иначе передаем как единственный аргумент
-                else:
-                    result = method(input_data)
-                    
-            except (json.JSONDecodeError, TypeError) as e:
-                # Если не JSON или ошибка типа - передаем как строку
-                result = method(test_input.strip())
+                result = method(**test_input)
+            except TypeError:
+                # Если не подошло, передаем весь dict как один аргумент
+                result = method(test_input)
+        elif isinstance(test_input, list):
+            # List с позиционными аргументами: [[1,2,3], 9]
+            result = method(*test_input)
+        else:
+            # Примитивный тип (str, int, etc.) - передаем как единственный аргумент
+            result = method(test_input)
         
         # Восстанавливаем stdout для вывода результата
         sys.stdout = _original_stdout
@@ -236,8 +227,27 @@ if __name__ == "__main__":
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 """
-        # Заменяем placeholder на реальные данные
-        test_input_repr = json.dumps(test_input)
+        # Обрабатываем test_input (может быть строкой с невалидным JSON)
+        parsed_input = test_input
+        
+        if isinstance(test_input, str):
+            # Пробуем распарсить как JSON
+            try:
+                parsed_input = json.loads(test_input)
+            except json.JSONDecodeError:
+                # Если не валидный JSON, пробуем исправить "[1,2,3], 9" -> [[1,2,3], 9]
+                if ',' in test_input and not (test_input.startswith('[') and test_input.endswith(']')):
+                    try:
+                        parsed_input = json.loads(f"[{test_input}]")
+                    except:
+                        parsed_input = test_input
+                else:
+                    parsed_input = test_input
+        
+        # Сериализуем в JSON строку и экранируем для вставки в Python код
+        test_input_json_str = json.dumps(parsed_input)
+        # Используем repr() чтобы получить правильно экранированную Python строку
+        test_input_repr = repr(test_input_json_str)
         wrapper_code = wrapper_code.replace("TEST_INPUT_DATA", test_input_repr)
         
         # Важно: header (перехват stdout) -> source_code (код пользователя) -> wrapper (выполнение)

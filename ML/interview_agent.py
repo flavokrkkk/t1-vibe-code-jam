@@ -30,7 +30,7 @@ ResponseType = {
 }
 
 
-def get_system_prompt(job_title: str, required_skills: list[str], amount_of_tasks: int, preferences: str | None = None) -> str:
+def get_system_prompt(job_role_description: str, required_skills: list[str], amount_of_tasks: int, preferences: str | None = None) -> str:
     """Генерация системного промпта для интервью."""
     skills_text = ", ".join(required_skills) if required_skills else "не указаны"
     preferences_text = f"\n\n### ДОПОЛНИТЕЛЬНЫЕ ПРЕДПОЧТЕНИЯ:\n{preferences}\n\nУчитывай эти предпочтения при планировании интервью." if preferences else ""
@@ -185,7 +185,7 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 
 - План интервью: **{amount_of_tasks} шагов**
 
-- Позиция: "{job_title}"
+- Позиция: "{job_role_description}"
 
 - Требуемые навыки: {skills_text}{preferences_text}
 
@@ -214,7 +214,7 @@ def get_system_prompt(job_title: str, required_skills: list[str], amount_of_task
 2. Поприветствуй кандидата
 3. Задай первый вопрос
 
-**КРИТИЧЕСКИ ВАЖНО:** В `answerText` должно быть **приветствие И первый вопрос вместе** (например: "Здравствуйте! Меня зовут [имя], я буду проводить интервью на позицию {job_title}. Давайте начнем. Расскажите о вашем опыте работы с Python?").
+**КРИТИЧЕСКИ ВАЖНО:** В `answerText` должно быть **приветствие И первый вопрос вместе** (например: "Здравствуйте! Меня зовут [имя], я буду проводить интервью на позицию {job_role_description}. Давайте начнем. Расскажите о вашем опыте работы с Python?").
 
 В `nextStep.questionText` можно указать только вопрос (без приветствия), но лучше оставить его пустым или повторить только вопрос для следующего шага.
 
@@ -296,7 +296,7 @@ class InterviewAgent:
         self.conversation_history: list[Any] = []
         self.interview_ended = False
         self.amount_of_tasks = 0
-        self.job_title = ""
+        self.job_role_description = ""
         self.required_skills: list[str] = []
         self.preferences: str | None = None
         self.code_submit_count: dict[str, int] = {}
@@ -308,7 +308,7 @@ class InterviewAgent:
     def _get_messages_with_history(self, user_input: str) -> list:
         """Создание списка сообщений с полной историей для диалогового режима."""
         system_prompt = get_system_prompt(
-            self.job_title,
+            self.job_role_description,
             self.required_skills,
             self.amount_of_tasks,
             self.preferences
@@ -404,13 +404,13 @@ class InterviewAgent:
 
     def start_interview(
         self,
-        job_title: str,
+        job_role_description: str,
         required_skills: list[str],
         amount_of_tasks: int,
         preferences: str | None = None,
     ) -> dict[str, Any]:
         """Начало интервью - получение первого вопроса в формате STEP."""
-        self.job_title = job_title
+        self.job_role_description = job_role_description
         self.required_skills = required_skills
         self.amount_of_tasks = amount_of_tasks
         self.preferences = preferences
@@ -422,7 +422,7 @@ class InterviewAgent:
         
         messages = [
             SystemMessage(content=get_system_prompt(
-                self.job_title,
+                self.job_role_description,
                 self.required_skills,
                 self.amount_of_tasks,
                 self.preferences
@@ -504,13 +504,13 @@ class InterviewAgent:
 
     def start_interview_stream(
         self,
-        job_title: str,
+        job_role_description: str,
         required_skills: list[str],
         amount_of_tasks: int,
         preferences: str | None = None,
     ):
         """Начало интервью со стримингом ответа."""
-        self.job_title = job_title
+        self.job_role_description = job_role_description
         self.required_skills = required_skills
         self.amount_of_tasks = amount_of_tasks
         self.preferences = preferences
@@ -522,7 +522,7 @@ class InterviewAgent:
         
         messages = [
             SystemMessage(content=get_system_prompt(
-                self.job_title,
+                self.job_role_description,
                 self.required_skills,
                 self.amount_of_tasks,
                 self.preferences

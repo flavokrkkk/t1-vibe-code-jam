@@ -74,7 +74,7 @@ class InterviewService(BaseDbModelService[Interview]):
         session_id = str(interview.id)
 
         ml_response = await self.ml_client.start_interview(
-            job_title=job_role_description,
+            job_role_description=job_role_description,
             required_skills=key_skills or [],
             amount_of_tasks=amount_of_tasks,
             session_id=session_id,

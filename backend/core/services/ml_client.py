@@ -22,7 +22,7 @@ class MLClient:
 
     async def start_interview(
         self,
-        job_title: str,
+        job_role_description: str,
         required_skills: list[str],
         amount_of_tasks: int,
         session_id: str | None = None,
@@ -30,7 +30,7 @@ class MLClient:
         """Начало интервью - получение первого шага от ML сервиса."""
         url = f"{self.base_url}/start"
         payload = {
-            "job_title": job_title,
+            "job_role_description": job_role_description,
             "required_skills": required_skills,
             "amount_of_tasks": amount_of_tasks,
         }

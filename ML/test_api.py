@@ -18,7 +18,7 @@ def _create_interview_session():
     response = client.post(
         "/start",
         json={
-            "job_title": "Python Developer",
+            "job_role_description": "Python Developer",
             "required_skills": ["Python", "FastAPI", "SQL"],
             "amount_of_tasks": 5
         }
@@ -33,7 +33,7 @@ def test_start_interview():
     response = client.post(
         "/start",
         json={
-            "job_title": "Python Developer",
+            "job_role_description": "Python Developer",
             "required_skills": ["Python", "FastAPI", "SQL"],
             "amount_of_tasks": 5
         }
@@ -55,7 +55,7 @@ def test_start_interview_validation():
     response = client.post(
         "/start",
         json={
-            "job_title": "",
+            "job_role_description": "",
             "required_skills": [],
             "amount_of_tasks": 0
         }
@@ -129,7 +129,7 @@ def test_full_interview_flow():
     start_response = client.post(
         "/start",
         json={
-            "job_title": "Backend Developer",
+            "job_role_description": "Backend Developer",
             "required_skills": ["Python", "Django"],
             "amount_of_tasks": 3
         }
@@ -162,7 +162,7 @@ def test_interview_with_completion():
     start_response = client.post(
         "/start",
         json={
-            "job_title": "Junior Developer",
+            "job_role_description": "Junior Developer",
             "required_skills": ["Python"],
             "amount_of_tasks": 2
         }

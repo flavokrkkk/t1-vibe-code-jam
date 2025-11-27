@@ -23,8 +23,8 @@ agents: dict[str, InterviewAgent] = {}
 class StartInterviewRequest(BaseModel):
     """Запрос на начало интервью."""
     
-    job_title: str = Field(..., min_length=1, max_length=200, description="Название вакансии")
-    required_skills: list[str] = Field(..., min_length=1, description="Список требуемых навыков")
+    job_role_description: str = Field(..., min_length=1, max_length=200, description="Название вакансии")
+    required_skills: list[str] = Field(default_factory=list, description="Список требуемых навыков (опционально)")
     amount_of_tasks: int = Field(..., ge=1, le=30, description="Количество вопросов в интервью")
     session_id: str | None = Field(None, description="ID сессии (опционально, для синхронизации с бэкендом)")
 
@@ -84,7 +84,7 @@ async def start_interview(request: StartInterviewRequest) -> StartInterviewRespo
             )
         
         first_step = agent.start_interview(
-            job_title=request.job_title,
+            job_role_description=request.job_role_description,
             required_skills=request.required_skills,
             amount_of_tasks=request.amount_of_tasks,
         )
@@ -148,7 +148,7 @@ async def start_interview_stream(request: StartInterviewRequest) -> StartIntervi
         
         full_response = ""
         for chunk in agent.start_interview_stream(
-            job_title=request.job_title,
+            job_role_description=request.job_role_description,
             required_skills=request.required_skills,
             amount_of_tasks=request.amount_of_tasks,
         ):
