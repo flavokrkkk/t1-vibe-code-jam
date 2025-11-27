@@ -116,21 +116,74 @@ async def process_message(request: MessageRequest) -> InterviewStepResponse:
         agent = agents[request.session_id]
         step = agent.process_answer(request.user_answer)
         
+        # Гарантируем, что step всегда валиден
         if step is None:
-            raise RuntimeError("Агент вернул None вместо шага интервью")
+            logger.error("process_answer вернул None, создаем fallback ответ")
+            step = {
+                "type": "DIALOG",
+                "question_text": "Извините, произошла ошибка. Давайте продолжим интервью.",
+                "status": "IN_PROGRESS",
+                "score": None,
+                "ai_feedback": "Произошла ошибка при обработке ответа.",
+                "user_answer": request.user_answer,
+                "feedback": None,
+                "next_step": {
+                    "type": "DIALOG",
+                    "question_text": "Пожалуйста, повторите ваш ответ."
+                }
+            }
         
-        if step.get("status") == "COMPLETED" and agent.is_interview_complete():
-            final_feedback = agent.generate_feedback()
-            step["ai_feedback"] = final_feedback
-            step["feedback"] = final_feedback
+        # Проверяем обязательные поля
+        if "type" not in step:
+            step["type"] = "DIALOG"
+        if "question_text" not in step or not step.get("question_text"):
+            step["question_text"] = step.get("ai_feedback") or step.get("feedback") or "Продолжаем интервью."
+        if "status" not in step:
+            step["status"] = "IN_PROGRESS"
         
-        return InterviewStepResponse(**step)
+        # process_answer уже возвращает overallFeedback в ai_feedback при final_feedback
+        # Не нужно вызывать generate_feedback() повторно, это вызывает таймаут
+        # if step.get("status") == "COMPLETED" and agent.is_interview_complete():
+        #     final_feedback = agent.generate_feedback()
+        #     step["ai_feedback"] = final_feedback
+        #     step["feedback"] = final_feedback
+        
+        try:
+            return InterviewStepResponse(**step)
+        except Exception as validation_error:
+            logger.error(f"Ошибка валидации ответа: {validation_error}", exc_info=True)
+            # Если валидация не прошла, создаем минимальный валидный ответ
+            fallback_step = {
+                "type": "DIALOG",
+                "question_text": step.get("question_text", "Продолжаем интервью.") or "Продолжаем интервью.",
+                "status": step.get("status", "IN_PROGRESS"),
+                "score": step.get("score"),
+                "ai_feedback": step.get("ai_feedback", "Продолжаем интервью.") or "Продолжаем интервью.",
+                "user_answer": step.get("user_answer", request.user_answer),
+                "feedback": step.get("feedback"),
+                "next_step": step.get("next_step", {
+                    "type": "DIALOG",
+                    "question_text": "Продолжаем интервью."
+                })
+            }
+            return InterviewStepResponse(**fallback_step)
     except Exception as e:
-        logger.error(f"Ошибка при обработке сообщения: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при обработке сообщения: {str(e)}"
-        )
+        logger.error(f"Критическая ошибка при обработке сообщения: {e}", exc_info=True)
+        # Вместо выбрасывания исключения возвращаем fallback ответ
+        fallback_step = {
+            "type": "DIALOG",
+            "question_text": "Извините, произошла техническая ошибка. Давайте продолжим интервью.",
+            "status": "IN_PROGRESS",
+            "score": None,
+            "ai_feedback": "Произошла ошибка при обработке ответа. Продолжаем интервью.",
+            "user_answer": request.user_answer,
+            "feedback": None,
+            "next_step": {
+                "type": "DIALOG",
+                "question_text": "Пожалуйста, повторите ваш ответ."
+            }
+        }
+        return InterviewStepResponse(**fallback_step)
 
 
 @app.post("/start/stream", response_model=StartInterviewResponse, status_code=status.HTTP_200_OK)
