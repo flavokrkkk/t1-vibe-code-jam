@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useInterview } from "@/entities/interview/hooks/useInterview";
 import { InterviewChat } from "@/features/interview/ui/interviewChat";
 import { AntiCheatProvider } from "@/shared/lib/antiCheat/antiCheatProvider";
@@ -7,21 +7,32 @@ import {
   hasAcceptedRules,
   setRulesAccepted,
 } from "@/shared/lib/antiCheat/rulesStorage";
+import { InterviewStatus } from "@/entities/interview/types/types";
 
 const InterviewPage = () => {
   const { data: interview } = useInterview();
   const [showRulesDialog, setShowRulesDialog] = useState(false);
   const [rulesAccepted, setRulesAcceptedState] = useState(false);
 
+  const isInterviewCompleted = useMemo(
+    () =>
+      interview
+        ? interview.status === InterviewStatus.COMPLETED ||
+          (interview.overall_feedback !== null &&
+            interview.total_score !== null)
+        : false,
+    [interview]
+  );
+
   useEffect(() => {
     if (interview) {
       const accepted = hasAcceptedRules(interview.id);
       setRulesAcceptedState(accepted);
-      if (!accepted) {
+      if (!accepted && !isInterviewCompleted) {
         setShowRulesDialog(true);
       }
     }
-  }, [interview]);
+  }, [interview, isInterviewCompleted]);
 
   const handleAcceptRules = () => {
     if (interview) {
@@ -32,8 +43,10 @@ const InterviewPage = () => {
 
   if (!interview) return null;
 
+  const isAntiCheatEnabled = rulesAccepted && !isInterviewCompleted;
+
   return (
-    <AntiCheatProvider interviewId={interview.id} enabled={rulesAccepted}>
+    <AntiCheatProvider interviewId={interview.id} enabled={isAntiCheatEnabled}>
       <AntiCheatRulesDialog
         open={showRulesDialog}
         onOpenChange={setShowRulesDialog}
