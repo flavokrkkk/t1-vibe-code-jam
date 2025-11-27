@@ -44,9 +44,9 @@ const InterviewPage = () => {
   if (!interview) return null;
 
   const isAntiCheatEnabled = rulesAccepted && !isInterviewCompleted;
-  console.log(isAntiCheatEnabled);
+
   return (
-    <AntiCheatProvider interviewId={interview.id} enabled={false}>
+    <AntiCheatProvider interviewId={interview.id} enabled={isAntiCheatEnabled}>
       <AntiCheatRulesDialog
         open={showRulesDialog}
         onOpenChange={setShowRulesDialog}
