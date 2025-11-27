@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
     db_connection = DatabaseConnection()
     app.state.db_connection = db_connection
     await db_connection.create_all_tables()
+    await db_connection.init_test_data()
 
     logger.info("Application started successfully")
     yield

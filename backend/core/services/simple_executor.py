@@ -45,7 +45,7 @@ class SimpleExecutor:
                     run_command = 'node'
                 else:
                     suffix = '.py'
-                    run_command = 'python'
+                    run_command = 'python' 
                 
                 # Создаем временный файл
                 with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False, encoding='utf-8') as f:
