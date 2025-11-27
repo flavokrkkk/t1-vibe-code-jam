@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from core.config.config import settings
 from infrastructure.database.models.models import Base
+from infrastructure.database.test_db import init_test_db
 
 
 class DatabaseConnection:
@@ -20,8 +21,8 @@ class DatabaseConnection:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         
-    # async def init_test_db(self):
-    #     async with await self.get_session() as session:
-    #         await test_db(session)
+    async def init_test_data(self):
+        async with await self.get_session() as session:
+            await init_test_db(session)
         
     
