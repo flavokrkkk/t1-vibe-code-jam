@@ -20,10 +20,12 @@ class SimpleExecutor:
         Запускает тесты для кода.
         ВНИМАНИЕ: Выполняет код без изоляции! Только для разработки!
         """
-        if language.lower() != "python":
+        language_lower = language.lower()
+        
+        if language_lower not in ["python", "javascript", "js"]:
             return {
                 "all_passed": False,
-                "results": [{"passed": False, "status": "Unsupported language", "stdout": "", "stderr": f"Only Python supported in dev mode, got {language}", "expected": ""} for _ in test_cases]
+                "results": [{"passed": False, "status": "Unsupported language", "stdout": "", "stderr": f"Only Python and JavaScript supported in dev mode, got {language}", "expected": ""} for _ in test_cases]
             }
         
         results = []
@@ -35,17 +37,25 @@ class SimpleExecutor:
             
             try:
                 # Создаем исполняемый код
-                executable_code = self._create_executable_code(source_code, test_input)
+                executable_code = self._create_executable_code(source_code, test_input, language_lower)
+                
+                # Определяем расширение и команду запуска
+                if language_lower in ["javascript", "js"]:
+                    suffix = '.js'
+                    run_command = 'node'
+                else:
+                    suffix = '.py'
+                    run_command = 'python'
                 
                 # Создаем временный файл
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False, encoding='utf-8') as f:
                     f.write(executable_code)
                     temp_file = f.name
                 
                 try:
                     # Запускаем с timeout
                     process = await asyncio.create_subprocess_exec(
-                        'python', temp_file,
+                        run_command, temp_file,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE
                     )
@@ -128,8 +138,13 @@ class SimpleExecutor:
         # Если не JSON, возвращаем как есть
         return output
     
-    def _create_executable_code(self, source_code: str, test_input: str) -> str:
+    def _create_executable_code(self, source_code: str, test_input: str, language: str = "python") -> str:
         """Создает исполняемый код с wrapper'ом."""
+        
+        if language in ["javascript", "js"]:
+            return self._create_javascript_executable(source_code, test_input)
+        
+        # Python код
         # Сначала перехватываем stdout, ПОТОМ идет код пользователя
         header = """
 # Перехватываем stdout ДО выполнения кода пользователя
@@ -227,4 +242,92 @@ if __name__ == "__main__":
         
         # Важно: header (перехват stdout) -> source_code (код пользователя) -> wrapper (выполнение)
         return header + "\n" + source_code + "\n" + wrapper_code
+    
+    def _create_javascript_executable(self, source_code: str, test_input: str) -> str:
+        """Создает исполняемый JavaScript код с wrapper'ом."""
+        import json as json_lib
+        
+        # Экранируем test_input для вставки в JS код
+        test_input_json = json_lib.dumps(test_input)
+        
+        header = """
+// Перехватываем console.log ДО выполнения кода пользователя
+const originalLog = console.log;
+console.log = () => {}; // Игнорируем все console.log() от пользователя
+"""
+        
+        wrapper = f"""
+// Test execution wrapper
+(async () => {{
+    try {{
+        const testInput = {test_input_json};
+        
+        // Восстанавливаем console.log для вывода результата
+        console.log = originalLog;
+        
+        // Создаем экземпляр Solution
+        const sol = new Solution();
+        
+        // Находим первый метод (кроме constructor)
+        const methodNames = Object.getOwnPropertyNames(Solution.prototype)
+            .filter(name => name !== 'constructor');
+        
+        if (methodNames.length === 0) {{
+            console.error('Error: No public method found in Solution class');
+            process.exit(1);
+        }}
+        
+        const methodName = methodNames[0];
+        const method = sol[methodName].bind(sol);
+        
+        let result;
+        
+        // Если input пустой - вызываем без параметров
+        if (!testInput || !testInput.trim()) {{
+            result = method();
+        }} else {{
+            // Пробуем распарсить как JSON
+            try {{
+                const inputData = JSON.parse(testInput);
+                
+                // Если inputData - это object с именованными параметрами
+                if (typeof inputData === 'object' && !Array.isArray(inputData) && inputData !== null) {{
+                    // Передаем значения как аргументы
+                    result = method(...Object.values(inputData));
+                }} else if (Array.isArray(inputData)) {{
+                    // Если это массив - передаем как spread
+                    result = method(...inputData);
+                }} else {{
+                    // Иначе передаем как единственный аргумент
+                    result = method(inputData);
+                }}
+            }} catch (e) {{
+                // Если не JSON - передаем как строку
+                result = method(testInput.trim());
+            }}
+        }}
+        
+        // Выводим результат
+        if (result === null) {{
+            console.log('null');
+        }} else if (typeof result === 'boolean') {{
+            console.log(result ? 'true' : 'false');
+        }} else if (typeof result === 'object') {{
+            console.log(JSON.stringify(result));
+        }} else if (typeof result === 'string') {{
+            console.log(result);
+        }} else {{
+            console.log(result);
+        }}
+        
+    }} catch (e) {{
+        console.log = originalLog;
+        console.error('Error:', e.message);
+        console.error(e.stack);
+        process.exit(1);
+    }}
+}})();
+"""
+        
+        return header + "\n" + source_code + "\n" + wrapper
 
