@@ -580,11 +580,22 @@ class InterviewService(BaseDbModelService[Interview]):
             current_step.score = ml_response.get("score")
             await self.session.flush()
 
-    async def run_playground_code(
-        self, code: str, language: str, test_cases: list[dict] | None = None
-    ) -> dict:
-        if not test_cases:
-            test_cases = []
+    async def run_playground_code(self, code: str, language: str, code_task_id: UUID) -> dict:
+        """
+        Запускает код в playground режиме с тестами из БД.
+        Берет тесты из CodeTask по ID и прогоняет через Judge0.
+        """
+        # Получаем задачу из БД
+        result = await self.session.execute(
+            select(CodeTask).where(CodeTask.id == code_task_id)
+        )
+        code_task = result.scalar_one_or_none()
+        
+        if not code_task:
+            raise NotFoundException(f"Задача с ID {code_task_id} не найдена")
+        
+        test_cases = code_task.test_cases if isinstance(code_task.test_cases, list) else []
+        
         return await self.judge0_client.run_tests(code, language, test_cases)
 
     async def submit_code(

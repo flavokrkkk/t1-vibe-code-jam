@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "5173:80"
-    restart: always
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "5173:80"
+  #   restart: always
 
   db:
     image: postgres:15
@@ -51,6 +51,7 @@ services:
       SCIBOX_BASE_URL: https://llm.t1v.scibox.tech/v1
       ML_API_URL: http://ml-service:8080
       JUDGE0_API_URL: http://judge0-server:2358
+      USE_SIMPLE_EXECUTOR: "true"
     depends_on:
       db: 
         condition: service_healthy
@@ -86,9 +87,13 @@ services:
     privileged: true
     ports:
       - "2358:2358"
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
     environment:
       - AUTH_DISABLE_USERNAME_AND_PASSWORD=true
-      - JUDGE0_WORKERS=1
+      - JUDGE0_WORKERS=5
       - REDIS_HOST=judge0-redis
       - REDIS_PORT=6379
       - REDIS_URL=redis://judge0-redis:6379
@@ -98,6 +103,18 @@ services:
       - POSTGRES_DB=judge0
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0
+      - ENABLE_WAIT_RESULT=true
+      - ENABLE_COMPILER_OPTIONS=true
+      - USE_DOCS_AS_HOMEPAGE=false
+      - ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT=false
+      - ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT=false
+      - ENABLE_CPU_TIME_LIMIT=false
+      - ENABLE_WALL_TIME_LIMIT=false
+      - ENABLE_MEMORY_LIMIT=false
+      - USE_SECCOMP=false
+      - ENABLE_NETWORK=true
+    volumes:
+      - judge0-box:/box
     depends_on:
       judge0-db:
         condition: service_healthy
@@ -110,7 +127,13 @@ services:
     image: judge0/judge0:1.13.1
     container_name: judge0-workers
     restart: always
-    command: ["./scripts/workers"]
+    privileged: true
+    shm_size: 256mb
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    command: ["sh", "-c", "rm -rf /box/* && ./scripts/workers"]
     environment:
       - AUTH_DISABLE_USERNAME_AND_PASSWORD=true
       - REDIS_HOST=judge0-redis
@@ -122,12 +145,25 @@ services:
       - POSTGRES_DB=judge0
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0
+      - ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT=false
+      - ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT=false
+      - ENABLE_CPU_TIME_LIMIT=false
+      - ENABLE_WALL_TIME_LIMIT=false
+      - ENABLE_MEMORY_LIMIT=false
+      - MAX_CPU_TIME_LIMIT=15
+      - MAX_WALL_TIME_LIMIT=20
+      - MAX_MEMORY_LIMIT=512000
+      - USE_SECCOMP=false
+      - ENABLE_NETWORK=true
+      - RUN_ONLY_IF_ISOLATE_IS_PRESENT=false
+      - ISOLATE_ENABLED=false
+    volumes:
+      - judge0-box:/box
     depends_on:
       - judge0-db
       - judge0-redis
     networks:
       - app-network
-    privileged: true
 
   judge0-db:
     image: postgres:13
@@ -165,3 +201,4 @@ volumes:
   postgres_data:
   judge0-postgres-data:
   judge0-redis-data:
+  judge0-box:

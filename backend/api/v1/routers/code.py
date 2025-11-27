@@ -1,7 +1,8 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.v1.dependencies import get_interview_service, get_current_user_dependency
 from core.services.interview_service import InterviewService
@@ -12,9 +13,9 @@ from infrastructure.errors.base import BadRequestException
 router = APIRouter()
 
 class RunCodeRequest(BaseModel):
-    source_code: str
-    language: str
-    test_cases: list[dict] | None = None
+    source_code: str = Field(..., description="Код для выполнения")
+    language: str = Field(..., description="Язык программирования (python, javascript, go)")
+    code_task_id: UUID = Field(..., description="ID задачи из БД для получения тестов")
 
 @router.post(
     "/run",
@@ -28,11 +29,13 @@ async def run_code(
     """
     Run code with test cases (Playground mode).
     Does not affect interview state.
+    
+    Берет тесты из БД по code_task_id и прогоняет код.
     """
     return await interview_service.run_playground_code(
         data.source_code,
         data.language,
-        data.test_cases
+        data.code_task_id
     )
 
 
